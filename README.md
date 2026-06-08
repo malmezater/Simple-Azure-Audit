@@ -64,6 +64,24 @@ Install-Module Az.Advisor -Scope CurrentUser
 
 Om du inte redan är inloggad mot Azure öppnar skriptet automatiskt `Connect-AzAccount`.
 
+### 🗂️ Projektstruktur
+
+Koden är uppdelad i ett tunt huvudskript som orkestrerar körningen och en `src`-mapp där varje kontrollområde ligger i en egen fil. Det gör koden lättare att läsa, underhålla och utöka.
+
+```
+Invoke-AzureAudit.ps1            # Huvudskript: parametrar, inloggning, kör kontroller, anropar rapport
+src/
+├── AuditCommon.ps1              # Hjälpfunktioner (Write-Step, Write-Section, Add-Finding) + delad fyndsamling
+├── Checks.Security.ps1          # Invoke-SecurityChecks       (1. Säkerhet)
+├── Checks.Cost.ps1              # Invoke-CostChecks           (2. Kostnad)
+├── Checks.Infrastructure.ps1    # Invoke-InfrastructureChecks (3. Infrastruktur)
+├── Checks.Compliance.ps1        # Invoke-ComplianceChecks     (4. Compliance)
+├── Checks.Advisor.ps1           # Invoke-AdvisorChecks        (5. Azure Advisor)
+└── AuditReport.ps1              # New-AuditReport: genererar CSV + HTML-rapport
+```
+
+Huvudskriptet `dot-source`:ar in filerna i `src` vid start, så du kör fortfarande allt via `Invoke-AzureAudit.ps1` precis som tidigare. För att lägga till en ny kontroll skapar du en funktion (eller ny `Checks.*.ps1`-fil) som anropar `Add-Finding` och anropar den från huvudskriptet.
+
 ### Parametrar
 
 | Parameter | Typ | Standard | Beskrivning |
