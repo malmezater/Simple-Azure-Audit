@@ -1,28 +1,28 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Infrastructure.ps1
-# Infrastrukturhälsa: VM-diskkryptering, Key Vault-certifikat, Storage soft-delete.
+# Infrastructure health: VM disk encryption, Key Vault certificates, Storage soft-delete.
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-InfrastructureChecks {
-    Write-Section "3/5 · INFRASTRUKTURHÄLSA"
+    Write-Section "3/5 - INFRASTRUCTURE HEALTH"
 
-    # VM-diskkryptering
-    Write-Step "Kontrollerar VM-diskkryptering..."
+    # VM disk encryption
+    Write-Step "Checking VM disk encryption..."
     foreach ($vm in (Get-AzVM)) {
         try {
             $enc = Get-AzVMDiskEncryptionStatus -ResourceGroupName $vm.ResourceGroupName -VMName $vm.Name -ErrorAction Stop
             if ($enc.OsVolumeEncrypted -ne "Encrypted") {
-                Add-Finding -Category "Infrastruktur" -Severity "High" `
+                Add-Finding -Category "Infrastructure" -Severity "High" `
                     -Resource "$($vm.Name) ($($vm.ResourceGroupName))" `
                     -ResourceType "Virtual Machine" `
-                    -Finding "OS-disk är INTE krypterad (Azure Disk Encryption)" `
-                    -Recommendation "Aktivera Azure Disk Encryption (ADE) eller Encryption at Host för alla VM:ar."
+                    -Finding "OS disk is NOT encrypted (Azure Disk Encryption)" `
+                    -Recommendation "Enable Azure Disk Encryption (ADE) or Encryption at Host for all VMs."
             }
         } catch { }
     }
 
-    # Key Vault – certifikat som löper ut
-    Write-Step "Kontrollerar Key Vault-certifikat..."
+    # Key Vault - expiring certificates
+    Write-Step "Checking Key Vault certificates..."
     $keyVaults = Get-AzKeyVault
     foreach ($kv in $keyVaults) {
         try {
@@ -33,31 +33,31 @@ function Invoke-InfrastructureChecks {
                 $days   = [math]::Round(($expiry - (Get-Date)).TotalDays)
                 if ($days -le 90) {
                     $sev = if ($days -le 14) { "Critical" } elseif ($days -le 30) { "High" } else { "Medium" }
-                    Add-Finding -Category "Infrastruktur" -Severity $sev `
-                        -Resource "$($kv.VaultName) › $($certRef.Name)" `
-                        -ResourceType "KV-certifikat" `
-                        -Finding "Certifikat löper ut om $days dagar ($($expiry.ToString('yyyy-MM-dd')))" `
-                        -Recommendation "Förnya certifikatet. Aktivera automatisk förnyelse i Key Vault-principen."
+                    Add-Finding -Category "Infrastructure" -Severity $sev `
+                        -Resource "$($kv.VaultName) > $($certRef.Name)" `
+                        -ResourceType "KV certificate" `
+                        -Finding "Certificate expires in $days days ($($expiry.ToString('yyyy-MM-dd')))" `
+                        -Recommendation "Renew the certificate. Enable automatic renewal in the Key Vault policy."
                 }
             }
         } catch { }
     }
 
-    # Storage – blob soft delete
-    Write-Step "Kontrollerar Storage soft-delete..."
+    # Storage - blob soft delete
+    Write-Step "Checking Storage soft-delete..."
     $storageAccounts = Get-AzStorageAccount
     foreach ($sa in $storageAccounts) {
         try {
             $blobSvc = Get-AzStorageBlobServiceProperty -StorageAccount $sa -ErrorAction Stop
             if (-not $blobSvc.DeleteRetentionPolicy.Enabled) {
-                Add-Finding -Category "Infrastruktur" -Severity "Medium" `
+                Add-Finding -Category "Infrastructure" -Severity "Medium" `
                     -Resource $sa.StorageAccountName `
                     -ResourceType "Storage Account" `
-                    -Finding "Blob soft-delete är INTE aktiverat" `
-                    -Recommendation "Aktivera soft-delete (minst 7 dagar) som skydd mot oavsiktlig radering."
+                    -Finding "Blob soft-delete is NOT enabled" `
+                    -Recommendation "Enable soft-delete (at least 7 days) as protection against accidental deletion."
             }
         } catch { }
     }
 
-    Write-Step "  Infrastrukturkontroller klara." "Gray"
+    Write-Step "  Infrastructure checks complete." "Gray"
 }

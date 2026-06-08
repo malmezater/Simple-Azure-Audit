@@ -1,6 +1,6 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Advisor.ps1
-# Azure Advisor: hämtar alla aktiva rekommendationer (kräver Az.Advisor).
+# Azure Advisor: fetches all active recommendations (requires Az.Advisor).
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-AdvisorChecks {
@@ -8,17 +8,17 @@ function Invoke-AdvisorChecks {
         [switch]$SkipAdvisor
     )
 
-    Write-Section "5/5 · AZURE ADVISOR"
+    Write-Section "5/5 - AZURE ADVISOR"
 
     if ($SkipAdvisor) {
-        Write-Step "Hoppade över Advisor (parametern -SkipAdvisor angiven)." "DarkGray"
+        Write-Step "Skipped Advisor (-SkipAdvisor specified)." "DarkGray"
         return
     }
 
-    Write-Step "Hämtar Azure Advisor-rekommendationer..."
+    Write-Step "Fetching Azure Advisor recommendations..."
     try {
         $advisorRecs = Get-AzAdvisorRecommendation -ErrorAction Stop
-        Write-Step "  $($advisorRecs.Count) rekommendationer hittades." "Gray"
+        Write-Step "  $($advisorRecs.Count) recommendations found." "Gray"
 
         foreach ($rec in $advisorRecs) {
             $sev = switch ($rec.Impact) {
@@ -29,11 +29,11 @@ function Invoke-AdvisorChecks {
             }
             Add-Finding -Category "Advisor" -Severity $sev `
                 -Resource $(if ($rec.ImpactedValue) { $rec.ImpactedValue } elseif ($rec.ImpactedField) { $rec.ImpactedField } else { "N/A" }) `
-                -ResourceType $(if ($rec.ImpactedField) { $rec.ImpactedField } else { "Okänd" }) `
-                -Finding $(if ($rec.ShortDescription.Problem) { $rec.ShortDescription.Problem } else { "Se Azure Advisor" }) `
-                -Recommendation $(if ($rec.ShortDescription.Solution) { $rec.ShortDescription.Solution } else { "Se Azure Advisor-portalen" })
+                -ResourceType $(if ($rec.ImpactedField) { $rec.ImpactedField } else { "Unknown" }) `
+                -Finding $(if ($rec.ShortDescription.Problem) { $rec.ShortDescription.Problem } else { "See Azure Advisor" }) `
+                -Recommendation $(if ($rec.ShortDescription.Solution) { $rec.ShortDescription.Solution } else { "See the Azure Advisor portal" })
         }
     } catch {
-        Write-Step "  Kunde inte hämta Advisor-data. Kontrollera att Az.Advisor-modulen är installerad." "DarkYellow"
+        Write-Step "  Could not fetch Advisor data. Make sure the Az.Advisor module is installed." "DarkYellow"
     }
 }

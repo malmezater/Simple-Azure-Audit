@@ -1,6 +1,6 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Security.ps1
-# Säkerhetskontroller: NSG-regler, lösa Public IPs, RBAC/Owner, klassiska admins.
+# Security checks: NSG rules, orphaned Public IPs, RBAC/Owner, classic admins.
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-SecurityChecks {
@@ -9,10 +9,10 @@ function Invoke-SecurityChecks {
         [Parameter(Mandatory)][string]$SubscriptionName
     )
 
-    Write-Section "1/5 · SÄKERHET"
+    Write-Section "1/5 - SECURITY"
 
-    # NSG – farliga inbound-regler
-    Write-Step "Kontrollerar Network Security Groups..."
+    # NSG - dangerous inbound rules
+    Write-Step "Checking Network Security Groups..."
     $nsgs = Get-AzNetworkSecurityGroup
     $dangerousPorts = @("22","3389","1433","3306","5432","23","21","445","5985","5986")
 
@@ -32,51 +32,51 @@ function Invoke-SecurityChecks {
                        elseif ($isWildcard)                    { "Critical" }
                        else                                    { "High" }
 
-                Add-Finding -Category "Säkerhet" -Severity $sev `
-                    -Resource "$($nsg.Name) › $($rule.Name)" `
-                    -ResourceType "NSG-regel" `
-                    -Finding "Inbound port $portStr öppen mot Internet (0.0.0.0/0)" `
-                    -Recommendation "Begränsa källan till specifika IP-intervall, eller använd Azure Bastion/VPN i stället för direkt RDP/SSH-exponering."
+                Add-Finding -Category "Security" -Severity $sev `
+                    -Resource "$($nsg.Name) > $($rule.Name)" `
+                    -ResourceType "NSG rule" `
+                    -Finding "Inbound port $portStr open to the Internet (0.0.0.0/0)" `
+                    -Recommendation "Restrict the source to specific IP ranges, or use Azure Bastion/VPN instead of exposing RDP/SSH directly."
             }
         }
     }
-    Write-Step "  $($nsgs.Count) NSG:er granskade." "Gray"
+    Write-Step "  $($nsgs.Count) NSGs reviewed." "Gray"
 
-    # Lösa oassocierade Public IPs
-    Write-Step "Kontrollerar Public IP-adresser..."
+    # Orphaned, unassociated Public IPs
+    Write-Step "Checking Public IP addresses..."
     $pubIPs = Get-AzPublicIpAddress
     foreach ($pip in $pubIPs) {
         if (-not $pip.IpConfiguration) {
-            Add-Finding -Category "Säkerhet" -Severity "Low" `
+            Add-Finding -Category "Security" -Severity "Low" `
                 -Resource $pip.Name `
                 -ResourceType "Public IP" `
-                -Finding "Ej associerad Public IP ($(if ($pip.IpAddress) { $pip.IpAddress } else { 'ej allokerad' }))" `
-                -Recommendation "Ta bort oanvända Public IPs för att minska attackytan och kostnaderna."
+                -Finding "Unassociated Public IP ($(if ($pip.IpAddress) { $pip.IpAddress } else { 'not allocated' }))" `
+                -Recommendation "Remove unused Public IPs to reduce the attack surface and cost."
         }
     }
 
-    # RBAC – för många Owner på prenumerationsnivå
-    Write-Step "Kontrollerar RBAC-tilldelningar..."
+    # RBAC - too many Owners at subscription scope
+    Write-Step "Checking RBAC assignments..."
     $ownerAssignments = Get-AzRoleAssignment -RoleDefinitionName "Owner" |
                         Where-Object { $_.Scope -eq "/subscriptions/$SubscriptionId" }
 
     if ($ownerAssignments.Count -gt 3) {
-        Add-Finding -Category "Säkerhet" -Severity "High" `
-            -Resource "Prenumeration: $SubscriptionName" `
+        Add-Finding -Category "Security" -Severity "High" `
+            -Resource "Subscription: $SubscriptionName" `
             -ResourceType "RBAC" `
-            -Finding "$($ownerAssignments.Count) Owner-roller på prenumerationsnivå (rekommenderat ≤3)" `
-            -Recommendation "Följ minsta-privilegs-principen. Använd Contributor/Reader där Owner inte krävs."
+            -Finding "$($ownerAssignments.Count) Owner roles at subscription scope (recommended <=3)" `
+            -Recommendation "Follow the principle of least privilege. Use Contributor/Reader where Owner is not required."
     }
 
-    # Klassiska administratörer (legacy)
+    # Classic administrators (legacy)
     $classicAdmins = Get-AzRoleAssignment | Where-Object { $_.RoleDefinitionName -match "CoAdministrator|ServiceAdministrator" }
     foreach ($admin in $classicAdmins) {
-        Add-Finding -Category "Säkerhet" -Severity "Medium" `
-            -Resource $(if ($admin.SignInName) { $admin.SignInName } elseif ($admin.DisplayName) { $admin.DisplayName } else { "Okänd" }) `
-            -ResourceType "Klassisk admin" `
-            -Finding "Legacy-rollen '$($admin.RoleDefinitionName)' är fortfarande tilldelad" `
-            -Recommendation "Migrera till Azure RBAC. Klassiska administratörsroller är deprecerade av Microsoft."
+        Add-Finding -Category "Security" -Severity "Medium" `
+            -Resource $(if ($admin.SignInName) { $admin.SignInName } elseif ($admin.DisplayName) { $admin.DisplayName } else { "Unknown" }) `
+            -ResourceType "Classic admin" `
+            -Finding "Legacy role '$($admin.RoleDefinitionName)' is still assigned" `
+            -Recommendation "Migrate to Azure RBAC. Classic administrator roles are deprecated by Microsoft."
     }
 
-    Write-Step "  Säkerhetskontroller klara." "Gray"
+    Write-Step "  Security checks complete." "Gray"
 }

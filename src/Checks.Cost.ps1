@@ -1,60 +1,60 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Cost.ps1
-# Kostnadskontroller: ohängda diskar, stoppade VMs, lösa NICs, tomma RGs.
+# Cost checks: unattached disks, stopped VMs, orphaned NICs, empty RGs.
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-CostChecks {
-    Write-Section "2/5 · KOSTNAD & OANVÄNDA RESURSER"
+    Write-Section "2/5 - COST & UNUSED RESOURCES"
 
-    # Ohängda managed disks
-    Write-Step "Kontrollerar ohängda diskar..."
+    # Unattached managed disks
+    Write-Step "Checking unattached disks..."
     $unattachedDisks = Get-AzDisk | Where-Object { $_.DiskState -eq "Unattached" }
     foreach ($disk in $unattachedDisks) {
-        Add-Finding -Category "Kostnad" -Severity "Medium" `
+        Add-Finding -Category "Cost" -Severity "Medium" `
             -Resource "$($disk.Name) ($($disk.ResourceGroupName))" `
             -ResourceType "Managed Disk" `
-            -Finding "Ohängd disk: $($disk.DiskSizeGB) GB, SKU: $($disk.Sku.Name)" `
-            -Recommendation "Radera eller snapshoota ohängda diskar. En disk på 1 TB P30 kostar ~450 SEK/mån i onödan."
+            -Finding "Unattached disk: $($disk.DiskSizeGB) GB, SKU: $($disk.Sku.Name)" `
+            -Recommendation "Delete or snapshot unattached disks. A 1 TB P30 disk costs roughly 40 USD/month for nothing."
     }
-    Write-Step "  $($unattachedDisks.Count) ohängda diskar hittade." "Gray"
+    Write-Step "  $($unattachedDisks.Count) unattached disks found." "Gray"
 
-    # Stoppade/deallocated VMs
-    Write-Step "Kontrollerar VM-status..."
+    # Stopped/deallocated VMs
+    Write-Step "Checking VM status..."
     $allVMs = Get-AzVM -Status
     foreach ($vm in $allVMs) {
         $state = ($vm.Statuses | Where-Object { $_.Code -match "^PowerState/" }).DisplayStatus
         if ($state -in @("VM stopped","VM deallocated")) {
-            Add-Finding -Category "Kostnad" -Severity "Low" `
+            Add-Finding -Category "Cost" -Severity "Low" `
                 -Resource $vm.Name `
                 -ResourceType "Virtual Machine" `
-                -Finding "VM är stoppad ($state) – lagringskostnader löper fortfarande" `
-                -Recommendation "Radera VM om den inte behövs. Deallocated VM betalar inte compute, men diskarna kostar."
+                -Finding "VM is stopped ($state) - storage costs still apply" `
+                -Recommendation "Delete the VM if it is not needed. A deallocated VM pays no compute, but its disks still cost."
         }
     }
 
-    # Lösa NICs
-    Write-Step "Kontrollerar oanvända nätverksgränssnitt..."
+    # Orphaned NICs
+    Write-Step "Checking unused network interfaces..."
     $looseNICs = Get-AzNetworkInterface | Where-Object { -not $_.VirtualMachine }
     foreach ($nic in $looseNICs) {
-        Add-Finding -Category "Kostnad" -Severity "Low" `
+        Add-Finding -Category "Cost" -Severity "Low" `
             -Resource "$($nic.Name) ($($nic.ResourceGroupName))" `
-            -ResourceType "Nätverksgränssnitt" `
-            -Finding "NIC är inte kopplad till någon VM" `
-            -Recommendation "Ta bort lösa NIC:ar för att hålla miljön ren."
+            -ResourceType "Network Interface" `
+            -Finding "NIC is not attached to any VM" `
+            -Recommendation "Remove orphaned NICs to keep the environment clean."
     }
 
-    # Tomma resursgrupper
-    Write-Step "Kontrollerar tomma resursgrupper..."
+    # Empty resource groups
+    Write-Step "Checking empty resource groups..."
     $emptyRGs = Get-AzResourceGroup | Where-Object {
         (Get-AzResource -ResourceGroupName $_.ResourceGroupName).Count -eq 0
     }
     foreach ($rg in $emptyRGs) {
-        Add-Finding -Category "Kostnad" -Severity "Info" `
+        Add-Finding -Category "Cost" -Severity "Info" `
             -Resource $rg.ResourceGroupName `
-            -ResourceType "Resursgrupp" `
-            -Finding "Tom resursgrupp utan resurser" `
-            -Recommendation "Radera tomma resursgrupper för att hålla prenumerationen strukturerad."
+            -ResourceType "Resource Group" `
+            -Finding "Empty resource group with no resources" `
+            -Recommendation "Delete empty resource groups to keep the subscription tidy."
     }
 
-    Write-Step "  Kostnadskontroller klara." "Gray"
+    Write-Step "  Cost checks complete." "Gray"
 }

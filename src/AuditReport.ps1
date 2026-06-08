@@ -1,6 +1,6 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # AuditReport.ps1
-# Genererar CSV- och HTML-rapport från insamlade fynd.
+# Generates the CSV and HTML report from the collected findings.
 # ─────────────────────────────────────────────────────────────
 
 function New-AuditReport {
@@ -13,28 +13,28 @@ function New-AuditReport {
         [Parameter(Mandatory)][string]$HtmlPath
     )
 
-    Write-Section "GENERERAR RAPPORTER"
+    Write-Section "GENERATING REPORTS"
 
     # ── CSV ──────────────────────────────────────────────────
-    Write-Step "Sparar CSV..."
+    Write-Step "Saving CSV..."
     $Findings | Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
     Write-Step "  $CsvPath" "Gray"
 
     # ── HTML ─────────────────────────────────────────────────
-    Write-Step "Bygger HTML-rapport..."
+    Write-Step "Building HTML report..."
 
     $sevOrder = @{ "Critical"=0; "High"=1; "Medium"=2; "Low"=3; "Info"=4 }
-    $sorted   = $Findings | Sort-Object { $sevOrder[$_.Allvarlighet] }
+    $sorted   = $Findings | Sort-Object { $sevOrder[$_.Severity] }
 
     $sevCount = @{
-        Critical = ($Findings | Where-Object Allvarlighet -eq "Critical").Count
-        High     = ($Findings | Where-Object Allvarlighet -eq "High").Count
-        Medium   = ($Findings | Where-Object Allvarlighet -eq "Medium").Count
-        Low      = ($Findings | Where-Object Allvarlighet -eq "Low").Count
-        Info     = ($Findings | Where-Object Allvarlighet -eq "Info").Count
+        Critical = ($Findings | Where-Object Severity -eq "Critical").Count
+        High     = ($Findings | Where-Object Severity -eq "High").Count
+        Medium   = ($Findings | Where-Object Severity -eq "Medium").Count
+        Low      = ($Findings | Where-Object Severity -eq "Low").Count
+        Info     = ($Findings | Where-Object Severity -eq "Info").Count
     }
 
-    $catStats = $Findings | Group-Object Kategori | Sort-Object Count -Descending
+    $catStats = $Findings | Group-Object Category | Sort-Object Count -Descending
 
     $badgeColors = @{
         "Critical" = "#c0392b"; "High" = "#e67e22"
@@ -49,14 +49,14 @@ function New-AuditReport {
     Add-Type -AssemblyName System.Web
 
     $tableRows = ($sorted | ForEach-Object {
-        $badge = Get-Badge $_.Allvarlighet
+        $badge = Get-Badge $_.Severity
         "<tr>
-          <td>$($_.Kategori)</td>
+          <td>$($_.Category)</td>
           <td>$badge</td>
-          <td style='font-size:.82rem;color:#555'>$($_.Resurstyp)</td>
-          <td style='font-family:Consolas,monospace;font-size:.8rem;color:#0078d4'>$([System.Web.HttpUtility]::HtmlEncode($_.Resurs))</td>
-          <td>$([System.Web.HttpUtility]::HtmlEncode($_.Fynd))</td>
-          <td style='font-size:.82rem;color:#555'>$([System.Web.HttpUtility]::HtmlEncode($_.Rekommendation))</td>
+          <td style='font-size:.82rem;color:#555'>$($_.ResourceType)</td>
+          <td style='font-family:Consolas,monospace;font-size:.8rem;color:#0078d4'>$([System.Web.HttpUtility]::HtmlEncode($_.Resource))</td>
+          <td>$([System.Web.HttpUtility]::HtmlEncode($_.Finding))</td>
+          <td style='font-size:.82rem;color:#555'>$([System.Web.HttpUtility]::HtmlEncode($_.Recommendation))</td>
         </tr>"
     }) -join "`n"
 
@@ -64,17 +64,17 @@ function New-AuditReport {
         "<tr><td>$($_.Name)</td><td><strong>$($_.Count)</strong></td></tr>"
     }) -join "`n"
 
-    # Severity-bar width
+    # Severity bar width
     $total = [math]::Max($Findings.Count, 1)
     function Get-Pct($n) { [math]::Round($n / $total * 100, 1) }
 
     $html = @"
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Azure Audit – $SubscriptionName</title>
+<title>Azure Audit - $SubscriptionName</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#2c3e50;font-size:14px}
@@ -109,10 +109,10 @@ function New-AuditReport {
 </head>
 <body>
 <header>
-  <h1>🔍 Azure Environment Audit</h1>
+  <h1>Azure Environment Audit</h1>
   <p>
     <strong>$SubscriptionName</strong> &nbsp;|&nbsp; $SubscriptionId<br>
-    Tenant: $TenantId &nbsp;|&nbsp; Genererad: $(Get-Date -Format 'yyyy-MM-dd HH:mm')
+    Tenant: $TenantId &nbsp;|&nbsp; Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm')
   </p>
 </header>
 
@@ -128,16 +128,16 @@ function New-AuditReport {
 
   <div style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;margin-bottom:1.5rem">
     <div class="panel">
-      <h2>📊 Fynd per kategori</h2>
+      <h2>Findings by category</h2>
       <table>
-        <thead><tr><th>Kategori</th><th>Antal</th></tr></thead>
+        <thead><tr><th>Category</th><th>Count</th></tr></thead>
         <tbody>$catRows</tbody>
       </table>
     </div>
     <div class="panel">
-      <h2>📈 Fördelning per allvarlighet</h2>
+      <h2>Distribution by severity</h2>
       <table>
-        <thead><tr><th>Nivå</th><th>Antal</th><th style="width:40%">Andel</th></tr></thead>
+        <thead><tr><th>Level</th><th>Count</th><th style="width:40%">Share</th></tr></thead>
         <tbody>
           <tr><td>Critical</td><td>$($sevCount.Critical)</td><td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Critical)%;background:#c0392b"></div></div></td></tr>
           <tr><td>High</td>    <td>$($sevCount.High)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.High)%;background:#e67e22"></div></div></td></tr>
@@ -150,16 +150,16 @@ function New-AuditReport {
   </div>
 
   <div class="panel">
-    <h2>📋 Alla fynd ($($Findings.Count) totalt) – sorterade efter allvarlighet</h2>
+    <h2>All findings ($($Findings.Count) total) - sorted by severity</h2>
     <table>
       <thead>
         <tr>
-          <th style="width:100px">Kategori</th>
-          <th style="width:90px">Nivå</th>
-          <th style="width:120px">Resurstyp</th>
-          <th style="width:200px">Resurs</th>
-          <th>Fynd</th>
-          <th style="width:250px">Rekommendation</th>
+          <th style="width:100px">Category</th>
+          <th style="width:90px">Level</th>
+          <th style="width:120px">Resource type</th>
+          <th style="width:200px">Resource</th>
+          <th>Finding</th>
+          <th style="width:250px">Recommendation</th>
         </tr>
       </thead>
       <tbody>
@@ -172,8 +172,8 @@ function New-AuditReport {
 
 <footer>
   Azure Audit Script &nbsp;·&nbsp; $(Get-Date -Format 'yyyy-MM-dd') &nbsp;·&nbsp;
-  Totalt $($Findings.Count) fynd &nbsp;·&nbsp;
-  <a href="$(Split-Path $CsvPath -Leaf)">Ladda ned CSV</a>
+  $($Findings.Count) findings total &nbsp;·&nbsp;
+  <a href="$(Split-Path $CsvPath -Leaf)">Download CSV</a>
 </footer>
 </body>
 </html>

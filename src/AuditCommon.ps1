@@ -1,10 +1,10 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # AuditCommon.ps1
-# Gemensamma hjälpfunktioner och delad fyndsamling för Azure Audit.
-# Dot-source:as in i huvudskriptet (Invoke-AzureAudit.ps1).
+# Shared helper functions and the common findings collection.
+# Dot-sourced from the main script (Invoke-AzureAudit.ps1).
 # ─────────────────────────────────────────────────────────────
 
-# Delad lista som alla kontrollfunktioner skriver sina fynd till.
+# Shared list that every check function writes its findings to.
 $script:AuditFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
 
 function Write-Step {
@@ -19,7 +19,7 @@ function Write-Section {
 
 function Add-Finding {
     param(
-        [ValidateSet("Säkerhet","Kostnad","Infrastruktur","Compliance","Advisor")][string]$Category,
+        [ValidateSet("Security","Cost","Infrastructure","Compliance","Advisor")][string]$Category,
         [ValidateSet("Critical","High","Medium","Low","Info")][string]$Severity,
         [string]$Resource,
         [string]$ResourceType,
@@ -27,18 +27,18 @@ function Add-Finding {
         [string]$Recommendation
     )
     $script:AuditFindings.Add([PSCustomObject]@{
-        Kategori       = $Category
-        Allvarlighet   = $Severity
-        Resurs         = $Resource
-        Resurstyp      = $ResourceType
-        Fynd           = $Finding
-        Rekommendation = $Recommendation
-        Tidstämpel     = (Get-Date -Format "yyyy-MM-dd HH:mm")
+        Category       = $Category
+        Severity       = $Severity
+        Resource       = $Resource
+        ResourceType   = $ResourceType
+        Finding        = $Finding
+        Recommendation = $Recommendation
+        Timestamp      = (Get-Date -Format "yyyy-MM-dd HH:mm")
     })
 }
 
 function Get-AuditFindings {
-    # Returnerar den delade fyndsamlingen.
+    # Returns the shared findings collection.
     , $script:AuditFindings
 }
 

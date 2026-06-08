@@ -3,22 +3,22 @@
 
 <#
 .SYNOPSIS
-    Azure Environment Audit Script – Säkerhet, Kostnad, Infrastruktur, Compliance & Advisor
+    Azure Environment Audit Script - Security, Cost, Infrastructure, Compliance & Advisor
 
 .DESCRIPTION
-    Kör en heltäckande kontroll av en Azure-prenumeration och genererar:
-      - En HTML-rapport med färgkodade fynd
-      - En CSV-fil för vidare analys i Excel
+    Runs a comprehensive review of an Azure subscription and generates:
+      - An HTML report with color-coded findings
+      - A CSV file for further analysis in Excel
 
-    Kontrollerar:
-      1. Säkerhet      – NSG-regler, öppna portar, RBAC/Owner-roller, klassiska admins
-      2. Kostnad       – Ohängda diskar, stoppade VMs, lösa NICs/PublicIPs, tomma RGs
-      3. Infrastruktur – VM-diskkryptering, Key Vault-certifikat, Storage soft-delete
-      4. Compliance    – TLS-versioner, HTTPS-tvång, blob-åtkomst, taggning, Key Vault-skydd
-      5. Advisor       – Alla aktiva Azure Advisor-rekommendationer (kräver Az.Advisor)
+    Checks:
+      1. Security       - NSG rules, open ports, RBAC/Owner roles, classic admins
+      2. Cost           - Unattached disks, stopped VMs, orphaned NICs/PublicIPs, empty RGs
+      3. Infrastructure - VM disk encryption, Key Vault certificates, Storage soft-delete
+      4. Compliance     - TLS versions, HTTPS enforcement, blob access, tagging, Key Vault protection
+      5. Advisor        - All active Azure Advisor recommendations (requires Az.Advisor)
 
-    Själva kontrollerna ligger uppdelade i src-mappen:
-      - src\AuditCommon.ps1            (hjälpfunktioner + delad fyndsamling)
+    The checks themselves are split across the src folder:
+      - src\AuditCommon.ps1            (helper functions + shared findings collection)
       - src\Checks.Security.ps1        (Invoke-SecurityChecks)
       - src\Checks.Cost.ps1            (Invoke-CostChecks)
       - src\Checks.Infrastructure.ps1  (Invoke-InfrastructureChecks)
@@ -27,20 +27,20 @@
       - src\AuditReport.ps1            (New-AuditReport)
 
 .PARAMETER SubscriptionId
-    Prenumerations-ID att köra mot. Utelämnas = aktiv kontext används.
+    Subscription ID to run against. Omitted = the active context is used.
 
 .PARAMETER OutputPath
-    Mapp att spara rapport och CSV i. Standard: aktuell katalog.
+    Folder to save the report and CSV in. Default: current directory.
 
 .PARAMETER RequiredTags
-    Kommaseparerad lista med obligatoriska taggar att kontrollera.
-    Standard: "Environment,Owner,CostCenter"
+    Comma-separated list of required tags to check for.
+    Default: "Environment,Owner,CostCenter"
 
 .PARAMETER SkipAdvisor
-    Hoppa över Azure Advisor-hämtning (snabbare körning).
+    Skip the Azure Advisor fetch (faster run).
 
 .PARAMETER OpenReport
-    Öppna HTML-rapporten automatiskt i webbläsaren efter körning.
+    Open the HTML report automatically in the browser after the run.
 
 .EXAMPLE
     .\Invoke-AzureAudit.ps1 -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\AuditReports"
@@ -49,8 +49,8 @@
     .\Invoke-AzureAudit.ps1 -RequiredTags "Environment,Owner,Project" -SkipAdvisor -OpenReport
 
 .NOTES
-    Kräver läsrättigheter (Reader) på prenumerationsnivå.
-    Rekommenderas att köra med Security Reader för fullständiga säkerhetskontroller.
+    Requires read access (Reader) at the subscription level.
+    Running with Security Reader is recommended for full security checks.
 #>
 
 [CmdletBinding()]
@@ -67,7 +67,7 @@ $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference     = "SilentlyContinue"
 
 # ─────────────────────────────────────────────────────────────
-# LADDA IN DELMODULER
+# LOAD SUBMODULES
 # ─────────────────────────────────────────────────────────────
 
 $srcPath = Join-Path $PSScriptRoot "src"
@@ -87,12 +87,12 @@ Write-Host @"
 
   ╔══════════════════════════════════════════════════════╗
   ║         Azure Environment Audit Script               ║
-  ║   Säkerhet · Kostnad · Infrastruktur · Compliance    ║
+  ║   Security · Cost · Infrastructure · Compliance      ║
   ╚══════════════════════════════════════════════════════╝
 "@ -ForegroundColor Cyan
 
 if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
-    Write-Host "`nLoggar in mot Azure..." -ForegroundColor Yellow
+    Write-Host "`nSigning in to Azure..." -ForegroundColor Yellow
     Connect-AzAccount | Out-Null
 }
 
@@ -113,13 +113,13 @@ $baseName  = "AzureAudit_$($subName -replace '[^a-zA-Z0-9]','_')_$timestamp"
 $htmlPath  = Join-Path $OutputPath "$baseName.html"
 $csvPath   = Join-Path $OutputPath "$baseName.csv"
 
-Write-Host "`n  Prenumeration : $subName" -ForegroundColor White
-Write-Host "  ID            : $subId"    -ForegroundColor Gray
-Write-Host "  Tenant        : $tenant"   -ForegroundColor Gray
-Write-Host "  Starttid      : $(Get-Date -Format 'HH:mm:ss')`n" -ForegroundColor Gray
+Write-Host "`n  Subscription : $subName" -ForegroundColor White
+Write-Host "  ID           : $subId"    -ForegroundColor Gray
+Write-Host "  Tenant       : $tenant"   -ForegroundColor Gray
+Write-Host "  Start time   : $(Get-Date -Format 'HH:mm:ss')`n" -ForegroundColor Gray
 
 # ─────────────────────────────────────────────────────────────
-# KÖR KONTROLLER
+# RUN CHECKS
 # ─────────────────────────────────────────────────────────────
 
 Invoke-SecurityChecks       -SubscriptionId $subId -SubscriptionName $subName
@@ -129,7 +129,7 @@ Invoke-ComplianceChecks     -RequiredTags $reqTags
 Invoke-AdvisorChecks        -SkipAdvisor:$SkipAdvisor
 
 # ─────────────────────────────────────────────────────────────
-# GENERERA RAPPORTER
+# GENERATE REPORTS
 # ─────────────────────────────────────────────────────────────
 
 $findings = Get-AuditFindings
@@ -143,23 +143,23 @@ New-AuditReport `
     -HtmlPath $htmlPath
 
 # ─────────────────────────────────────────────────────────────
-# SAMMANFATTNING
+# SUMMARY
 # ─────────────────────────────────────────────────────────────
 
 $sevCount = @{
-    Critical = ($findings | Where-Object Allvarlighet -eq "Critical").Count
-    High     = ($findings | Where-Object Allvarlighet -eq "High").Count
-    Medium   = ($findings | Where-Object Allvarlighet -eq "Medium").Count
-    Low      = ($findings | Where-Object Allvarlighet -eq "Low").Count
-    Info     = ($findings | Where-Object Allvarlighet -eq "Info").Count
+    Critical = ($findings | Where-Object Severity -eq "Critical").Count
+    High     = ($findings | Where-Object Severity -eq "High").Count
+    Medium   = ($findings | Where-Object Severity -eq "Medium").Count
+    Low      = ($findings | Where-Object Severity -eq "Low").Count
+    Info     = ($findings | Where-Object Severity -eq "Info").Count
 }
 
 Write-Host @"
 
   ╔══════════════════════════════════════════════════╗
-  ║              AUDIT KLAR                          ║
+  ║              AUDIT COMPLETE                      ║
   ╠══════════════════════════════════════════════════╣
-  ║  Totalt    : $($findings.Count.ToString().PadRight(38))║
+  ║  Total     : $($findings.Count.ToString().PadRight(38))║
   ║  Critical  : $($sevCount.Critical.ToString().PadRight(38))║
   ║  High      : $($sevCount.High.ToString().PadRight(38))║
   ║  Medium    : $($sevCount.Medium.ToString().PadRight(38))║
@@ -172,9 +172,9 @@ Write-Host @"
 "@ -ForegroundColor Cyan
 
 if ($OpenReport) {
-    Write-Host "`n  Öppnar rapport i webbläsaren..." -ForegroundColor Green
+    Write-Host "`n  Opening report in the browser..." -ForegroundColor Green
     Start-Process $htmlPath
 } else {
-    $open = Read-Host "`n  Öppna HTML-rapporten i webbläsaren? (j/n)"
-    if ($open -eq "j") { Start-Process $htmlPath }
+    $open = Read-Host "`n  Open the HTML report in the browser? (y/n)"
+    if ($open -eq "y") { Start-Process $htmlPath }
 }
