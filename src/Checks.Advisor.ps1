@@ -19,6 +19,20 @@ function Get-AdvisorProperty {
     return $current
 }
 
+function Get-AdvisorFirstValue {
+    # Returns the first non-empty value among several candidate property paths.
+    # Each candidate is an array of property names representing a (nested) path.
+    param(
+        [Parameter(Mandatory)]$InputObject,
+        [Parameter(Mandatory)][object[]]$Candidates
+    )
+    foreach ($path in $Candidates) {
+        $value = Get-AdvisorProperty -InputObject $InputObject -Path @($path)
+        if ($null -ne $value -and "$value".Trim()) { return "$value".Trim() }
+    }
+    return $null
+}
+
 function Invoke-AdvisorChecks {
     param(
         [switch]$SkipAdvisor
@@ -46,7 +60,7 @@ function Invoke-AdvisorChecks {
 
     foreach ($rec in $advisorRecs) {
         try {
-            $impact   = Get-AdvisorProperty -InputObject $rec -Path @("Impact")
+            $impact = Get-AdvisorProperty -InputObject $rec -Path @("Impact")
             $sev = switch ($impact) {
                 "High"   { "High" }
                 "Medium" { "Medium" }
@@ -56,8 +70,21 @@ function Invoke-AdvisorChecks {
 
             $impactedValue = Get-AdvisorProperty -InputObject $rec -Path @("ImpactedValue")
             $impactedField = Get-AdvisorProperty -InputObject $rec -Path @("ImpactedField")
-            $problem       = Get-AdvisorProperty -InputObject $rec -Path @("ShortDescription","Problem")
-            $solution      = Get-AdvisorProperty -InputObject $rec -Path @("ShortDescription","Solution")
+
+            # The problem/solution text lives under different property names depending
+            # on the Az.Advisor version: flattened (ShortDescriptionProblem) in newer
+            # builds, nested (ShortDescription.Problem) in older ones.
+            $problem = Get-AdvisorFirstValue -InputObject $rec -Candidates @(
+                @("ShortDescriptionProblem"),
+                @("ShortDescription","Problem"),
+                @("Problem"),
+                @("Description")
+            )
+            $solution = Get-AdvisorFirstValue -InputObject $rec -Candidates @(
+                @("ShortDescriptionSolution"),
+                @("ShortDescription","Solution"),
+                @("Solution")
+            )
 
             Add-Finding -Category "Advisor" -Severity $sev `
                 -Resource $(if ($impactedValue) { $impactedValue } elseif ($impactedField) { $impactedField } else { "N/A" }) `
