@@ -33,6 +33,7 @@ The script performs the following checks:
 
 ### 5. 📈 Azure Advisor
 - Fetches all active Azure Advisor recommendations (requires the `Az.Advisor` module).
+- Includes each recommendation's actual problem and solution text in the report, mapped to a severity based on its impact. The property names are resolved across `Az.Advisor` versions (both the newer flattened and older nested shapes).
 
 ---
 
@@ -154,6 +155,17 @@ Each finding is classified with one of the following levels:
 - Run the script regularly (e.g. via a scheduled task or pipeline) to track the health of your environment over time.
 - Use the CSV file to build trends and dashboards in Excel or Power BI.
 - Because `$ErrorActionPreference` is set to `SilentlyContinue`, the run is not aborted if individual resources lack permissions - run with sufficient rights for a complete result.
+
+---
+
+## 🛠️ Troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| **"Could not fetch Advisor data"** | The `Az.Advisor` module is missing or you are not signed in. Install it with `Install-Module Az.Advisor -Scope CurrentUser`, or run with `-SkipAdvisor`. The accompanying message in parentheses shows the underlying error. |
+| **Advisor rows show "See Azure Advisor"** | The recommendation genuinely has no problem/solution text. Other recommendations are still populated from the live data. |
+| **Run aborts with a `??` parse error** | The script targets PowerShell 7+. Run it with `pwsh`, not Windows PowerShell 5.1. |
+| **Garbled characters (å/ä/ö, box drawing)** | The `.ps1` files are saved as UTF-8 with BOM. Keep that encoding when editing so the banners render correctly. |
 
 ---
 
