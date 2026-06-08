@@ -173,7 +173,7 @@ foreach ($pip in $pubIPs) {
         Add-Finding -Category "Säkerhet" -Severity "Low" `
             -Resource $pip.Name `
             -ResourceType "Public IP" `
-            -Finding "Ej associerad Public IP ($($pip.IpAddress ?? 'ej allokerad'))" `
+            -Finding "Ej associerad Public IP ($(if ($pip.IpAddress) { $pip.IpAddress } else { 'ej allokerad' }))" `
             -Recommendation "Ta bort oanvända Public IPs för att minska attackytan och kostnaderna."
     }
 }
@@ -195,7 +195,7 @@ if ($ownerAssignments.Count -gt 3) {
 $classicAdmins = Get-AzRoleAssignment | Where-Object { $_.RoleDefinitionName -match "CoAdministrator|ServiceAdministrator" }
 foreach ($admin in $classicAdmins) {
     Add-Finding -Category "Säkerhet" -Severity "Medium" `
-        -Resource ($admin.SignInName ?? $admin.DisplayName ?? "Okänd") `
+        -Resource $(if ($admin.SignInName) { $admin.SignInName } elseif ($admin.DisplayName) { $admin.DisplayName } else { "Okänd" }) `
         -ResourceType "Klassisk admin" `
         -Finding "Legacy-rollen '$($admin.RoleDefinitionName)' är fortfarande tilldelad" `
         -Recommendation "Migrera till Azure RBAC. Klassiska administratörsroller är deprecerade av Microsoft."
@@ -440,11 +440,11 @@ if ($SkipAdvisor) {
                 default  { "Info" }
             }
             $cat = "Advisor ($($rec.Category))"
-            Add-Finding -Category "Advisor" -Severity $sev `
-                -Resource ($rec.ImpactedValue ?? $rec.ImpactedField ?? "N/A") `
-                -ResourceType ($rec.ImpactedField ?? "Okänd") `
-                -Finding ($rec.ShortDescription.Problem ?? "Se Azure Advisor") `
-                -Recommendation ($rec.ShortDescription.Solution ?? "Se Azure Advisor-portalen")
+            Add-Finding -Category $cat -Severity $sev `
+                -Resource $(if ($rec.ImpactedValue) { $rec.ImpactedValue } elseif ($rec.ImpactedField) { $rec.ImpactedField } else { "N/A" }) `
+                -ResourceType $(if ($rec.ImpactedField) { $rec.ImpactedField } else { "Okänd" }) `
+                -Finding $(if ($rec.ShortDescription.Problem) { $rec.ShortDescription.Problem } else { "Se Azure Advisor" }) `
+                -Recommendation $(if ($rec.ShortDescription.Solution) { $rec.ShortDescription.Solution } else { "Se Azure Advisor-portalen" })
         }
     } catch {
         Write-Step "  Kunde inte hämta Advisor-data. Kontrollera att Az.Advisor-modulen är installerad." "DarkYellow"
@@ -485,7 +485,7 @@ $badgeColors = @{
 }
 
 function Get-Badge($sev) {
-    $c = $badgeColors[$sev] ?? "#95a5a6"
+    $c = if ($badgeColors[$sev]) { $badgeColors[$sev] } else { "#95a5a6" }
     "<span style='background:$c;color:#fff;padding:2px 10px;border-radius:12px;font-size:.76rem;font-weight:700;white-space:nowrap'>$sev</span>"
 }
 
