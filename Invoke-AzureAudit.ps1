@@ -147,11 +147,11 @@ New-AuditReport `
 # ─────────────────────────────────────────────────────────────
 
 $sevCount = @{
-    Critical = ($findings | Where-Object Severity -eq "Critical").Count
-    High     = ($findings | Where-Object Severity -eq "High").Count
-    Medium   = ($findings | Where-Object Severity -eq "Medium").Count
-    Low      = ($findings | Where-Object Severity -eq "Low").Count
-    Info     = ($findings | Where-Object Severity -eq "Info").Count
+    Critical = @($findings | Where-Object { $_.Severity -eq "Critical" }).Count
+    High     = @($findings | Where-Object { $_.Severity -eq "High" }).Count
+    Medium   = @($findings | Where-Object { $_.Severity -eq "Medium" }).Count
+    Low      = @($findings | Where-Object { $_.Severity -eq "Low" }).Count
+    Info     = @($findings | Where-Object { $_.Severity -eq "Info" }).Count
 }
 
 Write-Host @"

@@ -27,11 +27,11 @@ function New-AuditReport {
     $sorted   = $Findings | Sort-Object { $sevOrder[$_.Severity] }
 
     $sevCount = @{
-        Critical = ($Findings | Where-Object Severity -eq "Critical").Count
-        High     = ($Findings | Where-Object Severity -eq "High").Count
-        Medium   = ($Findings | Where-Object Severity -eq "Medium").Count
-        Low      = ($Findings | Where-Object Severity -eq "Low").Count
-        Info     = ($Findings | Where-Object Severity -eq "Info").Count
+        Critical = @($Findings | Where-Object { $_.Severity -eq "Critical" }).Count
+        High     = @($Findings | Where-Object { $_.Severity -eq "High" }).Count
+        Medium   = @($Findings | Where-Object { $_.Severity -eq "Medium" }).Count
+        Low      = @($Findings | Where-Object { $_.Severity -eq "Low" }).Count
+        Info     = @($Findings | Where-Object { $_.Severity -eq "Info" }).Count
     }
 
     $catStats = $Findings | Group-Object Category | Sort-Object Count -Descending
