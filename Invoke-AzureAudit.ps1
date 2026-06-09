@@ -55,6 +55,7 @@
 
 [CmdletBinding()]
 param(
+    [string]   $TenantID,
     [string]   $SubscriptionId,
     [string]   $OutputPath    = ".",
     [string]   $RequiredTags  = "Environment,Owner,CostCenter",
