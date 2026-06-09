@@ -94,11 +94,50 @@ Write-Host @"
 
 if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
     Write-Host "`nSigning in to Azure..." -ForegroundColor Yellow
-    Connect-AzAccount | Out-Null
+    if ($TenantID) {
+        Connect-AzAccount -TenantId $TenantID | Out-Null
+    }
+    else {
+        Connect-AzAccount | Out-Null
+    }
 }
 
 if ($SubscriptionId) {
+    # Explicit subscription requested - use it directly.
     Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
+}
+else {
+    # No subscription specified - discover what's available in the tenant.
+    $subParams = @{ ErrorAction = "SilentlyContinue" }
+    if ($TenantID) { $subParams.TenantId = $TenantID }
+    $subscriptions = @(Get-AzSubscription @subParams | Where-Object { $_.State -eq "Enabled" })
+
+    if ($subscriptions.Count -eq 0) {
+        throw "No enabled subscriptions were found for the signed-in account."
+    }
+    elseif ($subscriptions.Count -eq 1) {
+        Set-AzContext -SubscriptionId $subscriptions[0].Id | Out-Null
+    }
+    else {
+        # Multiple subscriptions - let the user pick one every run.
+        Write-Host "`nMultiple subscriptions found. Please choose one:`n" -ForegroundColor Yellow
+        for ($i = 0; $i -lt $subscriptions.Count; $i++) {
+            Write-Host ("  [{0}] {1}  ({2})" -f ($i + 1), $subscriptions[$i].Name, $subscriptions[$i].Id) -ForegroundColor White
+        }
+
+        $choice = $null
+        while (-not $choice) {
+            $input = Read-Host "`nEnter the number of the subscription to audit (1-$($subscriptions.Count))"
+            if ($input -match '^\d+$' -and [int]$input -ge 1 -and [int]$input -le $subscriptions.Count) {
+                $choice = $subscriptions[[int]$input - 1]
+            }
+            else {
+                Write-Host "Invalid selection. Please enter a number between 1 and $($subscriptions.Count)." -ForegroundColor Red
+            }
+        }
+
+        Set-AzContext -SubscriptionId $choice.Id | Out-Null
+    }
 }
 
 $ctx     = Get-AzContext
