@@ -108,7 +108,7 @@ The main script dot-sources the files in `src` at startup, so you still run ever
 **Run against a specific subscription and save the report to a given folder:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1 -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\AuditReports"
+.\Invoke-AzureAudit.ps1 -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\Temp\AuditReports"
 ```
 
 **Sign in to a specific tenant and pick a subscription interactively:**
