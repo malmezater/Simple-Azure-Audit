@@ -50,7 +50,8 @@ function New-AuditReport {
 
     $tableRows = ($sorted | ForEach-Object {
         $badge = Get-Badge $_.Severity
-        "<tr>
+        $catAttr = [System.Web.HttpUtility]::HtmlAttributeEncode($_.Category)
+        "<tr data-category='$catAttr'>
           <td>$($_.Category)</td>
           <td>$badge</td>
           <td style='font-size:.82rem;color:#555'>$($_.ResourceType)</td>
@@ -61,7 +62,8 @@ function New-AuditReport {
     }) -join "`n"
 
     $catRows = ($catStats | ForEach-Object {
-        "<tr><td>$($_.Name)</td><td><strong>$($_.Count)</strong></td></tr>"
+        $catAttr = [System.Web.HttpUtility]::HtmlAttributeEncode($_.Name)
+        "<tr class='cat-row' data-category='$catAttr' onclick='filterCategory(this)' style='cursor:pointer'><td>$($_.Name)</td><td><strong>$($_.Count)</strong></td></tr>"
     }) -join "`n"
 
     # Severity bar width
@@ -97,6 +99,13 @@ function New-AuditReport {
   th{background:#f8f9fa;text-align:left;padding:.6rem .8rem;font-size:.82rem;font-weight:700;color:#555;border-bottom:2px solid #ddd}
   td{padding:.6rem .8rem;border-bottom:1px solid #f2f2f2;vertical-align:top;line-height:1.4}
   tr:hover td{background:#fafbff}
+  .cat-row:hover td{background:#e8f0fe}
+  .cat-row.active td{background:#0078d4;color:#fff}
+  .cat-row.active td strong{color:#fff}
+  .filter-note{display:none;align-items:center;gap:.6rem;font-size:.82rem;color:#555;margin-bottom:.8rem}
+  .filter-note.show{display:flex}
+  .filter-note .clear-btn{cursor:pointer;background:#0078d4;color:#fff;border:none;border-radius:6px;padding:.25rem .7rem;font-size:.78rem;font-weight:600}
+  .filter-note .clear-btn:hover{background:#005a9e}
   .bar-wrap{background:#eee;border-radius:6px;height:8px;margin-top:.3rem}
   .bar{height:8px;border-radius:6px}
   footer{text-align:center;padding:1.5rem;color:#aaa;font-size:.8rem}
@@ -129,6 +138,7 @@ function New-AuditReport {
   <div style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;margin-bottom:1.5rem">
     <div class="panel">
       <h2>Findings by category</h2>
+      <p style="font-size:.78rem;color:#7f8c8d;margin-bottom:.6rem">Click a category to filter the findings below.</p>
       <table>
         <thead><tr><th>Category</th><th>Count</th></tr></thead>
         <tbody>$catRows</tbody>
@@ -151,6 +161,10 @@ function New-AuditReport {
 
   <div class="panel">
     <h2>All findings ($($Findings.Count) total) - sorted by severity</h2>
+    <div class="filter-note" id="filterNote">
+      <span>Filtered by category: <strong id="filterLabel"></strong> (<span id="filterCount">0</span> shown)</span>
+      <button class="clear-btn" onclick="clearFilter()">Show all</button>
+    </div>
     <table>
       <thead>
         <tr>
@@ -162,7 +176,7 @@ function New-AuditReport {
           <th style="width:250px">Recommendation</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="findingsBody">
         $tableRows
       </tbody>
     </table>
@@ -175,6 +189,56 @@ function New-AuditReport {
   $($Findings.Count) findings total &nbsp;·&nbsp;
   <a href="$(Split-Path $CsvPath -Leaf)">Download CSV</a>
 </footer>
+
+<script>
+  var activeCategory = null;
+
+  function applyFilter(category) {
+    var rows = document.querySelectorAll('#findingsBody tr');
+    var shown = 0;
+    rows.forEach(function (row) {
+      if (category === null || row.getAttribute('data-category') === category) {
+        row.style.display = '';
+        shown++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    var catRows = document.querySelectorAll('.cat-row');
+    catRows.forEach(function (cr) {
+      if (category !== null && cr.getAttribute('data-category') === category) {
+        cr.classList.add('active');
+      } else {
+        cr.classList.remove('active');
+      }
+    });
+
+    var note = document.getElementById('filterNote');
+    if (category === null) {
+      note.classList.remove('show');
+    } else {
+      document.getElementById('filterLabel').textContent = category;
+      document.getElementById('filterCount').textContent = shown;
+      note.classList.add('show');
+    }
+  }
+
+  function filterCategory(el) {
+    var category = el.getAttribute('data-category');
+    if (activeCategory === category) {
+      clearFilter();
+    } else {
+      activeCategory = category;
+      applyFilter(category);
+    }
+  }
+
+  function clearFilter() {
+    activeCategory = null;
+    applyFilter(null);
+  }
+</script>
 </body>
 </html>
 "@

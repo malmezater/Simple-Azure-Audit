@@ -60,10 +60,19 @@ Install-Module Az.Advisor -Scope CurrentUser
 ## 🚀 Usage
 
 ```powershell
-.\Invoke-AzureAudit.ps1 [-SubscriptionId <string>] [-OutputPath <string>] [-RequiredTags <string>] [-SkipAdvisor] [-OpenReport]
+.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-SubscriptionId <string>] [-OutputPath <string>] [-RequiredTags <string>] [-SkipAdvisor] [-OpenReport]
 ```
 
-If you are not already signed in to Azure, the script automatically runs `Connect-AzAccount`.
+If you are not already signed in to Azure, the script automatically runs `Connect-AzAccount`. When a `-TenantID` is supplied, the sign-in is scoped to that tenant.
+
+### 🔑 Sign-in & subscription selection
+
+- Pass `-TenantID` to sign in to a specific Azure AD tenant.
+- If you pass `-SubscriptionId`, the script runs against that subscription directly.
+- If you omit `-SubscriptionId`, the script enumerates the **enabled** subscriptions in the tenant:
+  - **One subscription** - it is selected automatically.
+  - **Multiple subscriptions** - you are shown a numbered list and prompted to choose which one to audit, every run.
+  - **No subscriptions** - the script stops with a clear error.
 
 ### 🗂️ Project structure
 
@@ -87,7 +96,8 @@ The main script dot-sources the files in `src` at startup, so you still run ever
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `-SubscriptionId` | `string` | Active context | Subscription ID to run against. Omitted = the active context is used. |
+| `-TenantID` | `string` | Active context | Azure AD tenant to sign in to and enumerate subscriptions from. |
+| `-SubscriptionId` | `string` | Active context | Subscription ID to run against. Omitted = you are prompted to choose when the tenant has more than one enabled subscription. |
 | `-OutputPath` | `string` | `.` (current directory) | Folder where the HTML report and CSV are saved. Created automatically if it does not exist. |
 | `-RequiredTags` | `string` | `"Environment,Owner,CostCenter"` | Comma-separated list of required tags to check for. |
 | `-SkipAdvisor` | `switch` | Off | Skips the Azure Advisor fetch (faster run). |
@@ -99,6 +109,12 @@ The main script dot-sources the files in `src` at startup, so you still run ever
 
 ```powershell
 .\Invoke-AzureAudit.ps1 -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\AuditReports"
+```
+
+**Sign in to a specific tenant and pick a subscription interactively:**
+
+```powershell
+.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
 
 **Run with custom required tags, skip Advisor and open the report immediately:**
@@ -121,7 +137,7 @@ Each run generates two files in `-OutputPath`, named after the subscription and 
 
 | File | Description |
 |------|-------------|
-| `AzureAudit_<Subscription>_<timestamp>.html` | Interactive, color-coded report with summary cards, distribution by severity, findings by category and a complete table sorted by severity. Print-friendly. |
+| `AzureAudit_<Subscription>_<timestamp>.html` | Interactive, color-coded report with summary cards, distribution by severity, findings by category and a complete table sorted by severity. The **Findings by category** list is clickable - select a category to filter the **All findings** table to just that category, then **Show all** to reset. Print-friendly. |
 | `AzureAudit_<Subscription>_<timestamp>.csv` | Semicolon-separated CSV (UTF-8) with all findings for further analysis in Excel. |
 
 ### Severity levels
