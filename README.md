@@ -1,4 +1,4 @@
-# 🔍 Azure Audit Checker
+# 🔍 Simple Azure Audit
 
 A comprehensive PowerShell script that reviews an Azure subscription from five perspectives - **Security**, **Cost**, **Infrastructure**, **Compliance** and **Azure Advisor** - and generates a clean, color-coded HTML report together with a CSV file for further analysis in Excel.
 
@@ -114,7 +114,7 @@ The main script dot-sources the files in `src` at startup, so you still run ever
 **Sign in to a specific tenant and pick a subscription interactively:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\Temp\AuditReports"
 ```
 
 **Run with custom required tags, skip Advisor and open the report immediately:**
