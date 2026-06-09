@@ -64,7 +64,7 @@ function New-AuditReport {
 
     $catRows = ($catStats | ForEach-Object {
         $catAttr = [System.Web.HttpUtility]::HtmlAttributeEncode($_.Name)
-        "<tr class='cat-row' data-category='$catAttr' onclick='filterCategory(this)' style='cursor:pointer'><td>$($_.Name)</td><td><strong>$($_.Count)</strong></td></tr>"
+        "<tr class='cat-row' data-category='$catAttr' onclick='filterCategory(this)' style='cursor:pointer'><td>$($_.Name)</td><td><strong class='cat-count'>$($_.Count)</strong></td></tr>"
     }) -join "`n"
 
     # Severity bar width
@@ -154,11 +154,11 @@ function New-AuditReport {
       <table>
         <thead><tr><th>Level</th><th>Count</th><th style="width:40%">Share</th></tr></thead>
         <tbody>
-          <tr class="sev-row" data-severity="Critical" onclick="filterSeverity(this)"><td>Critical</td><td>$($sevCount.Critical)</td><td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Critical)%;background:#c0392b"></div></div></td></tr>
-          <tr class="sev-row" data-severity="High" onclick="filterSeverity(this)"><td>High</td>    <td>$($sevCount.High)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.High)%;background:#e67e22"></div></div></td></tr>
-          <tr class="sev-row" data-severity="Medium" onclick="filterSeverity(this)"><td>Medium</td>  <td>$($sevCount.Medium)</td>  <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Medium)%;background:#d4ac0d"></div></div></td></tr>
-          <tr class="sev-row" data-severity="Low" onclick="filterSeverity(this)"><td>Low</td>     <td>$($sevCount.Low)</td>     <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Low)%;background:#27ae60"></div></div></td></tr>
-          <tr class="sev-row" data-severity="Info" onclick="filterSeverity(this)"><td>Info</td>    <td>$($sevCount.Info)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Info)%;background:#2980b9"></div></div></td></tr>
+          <tr class="sev-row" data-severity="Critical" onclick="filterSeverity(this)"><td>Critical</td><td class="sev-count">$($sevCount.Critical)</td><td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Critical)%;background:#c0392b"></div></div></td></tr>
+          <tr class="sev-row" data-severity="High" onclick="filterSeverity(this)"><td>High</td>    <td class="sev-count">$($sevCount.High)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.High)%;background:#e67e22"></div></div></td></tr>
+          <tr class="sev-row" data-severity="Medium" onclick="filterSeverity(this)"><td>Medium</td>  <td class="sev-count">$($sevCount.Medium)</td>  <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Medium)%;background:#d4ac0d"></div></div></td></tr>
+          <tr class="sev-row" data-severity="Low" onclick="filterSeverity(this)"><td>Low</td>     <td class="sev-count">$($sevCount.Low)</td>     <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Low)%;background:#27ae60"></div></div></td></tr>
+          <tr class="sev-row" data-severity="Info" onclick="filterSeverity(this)"><td>Info</td>    <td class="sev-count">$($sevCount.Info)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Info)%;background:#2980b9"></div></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -202,22 +202,34 @@ function New-AuditReport {
   function applyFilter() {
     var rows = document.querySelectorAll('#findingsBody tr');
     var shown = 0;
+    var catTally = {};
+    var sevTally = {};
     rows.forEach(function (row) {
-      var catMatch = activeCategory === null || row.getAttribute('data-category') === activeCategory;
-      var sevMatch = activeSeverity === null || row.getAttribute('data-severity') === activeSeverity;
+      var cat = row.getAttribute('data-category');
+      var sev = row.getAttribute('data-severity');
+      var catMatch = activeCategory === null || cat === activeCategory;
+      var sevMatch = activeSeverity === null || sev === activeSeverity;
       if (catMatch && sevMatch) {
         row.style.display = '';
         shown++;
       } else {
         row.style.display = 'none';
       }
+      // Category counts reflect the active severity (ignore category selection).
+      if (sevMatch) { catTally[cat] = (catTally[cat] || 0) + 1; }
+      // Severity counts reflect the active category (ignore severity selection).
+      if (catMatch) { sevTally[sev] = (sevTally[sev] || 0) + 1; }
     });
 
     document.querySelectorAll('.cat-row').forEach(function (cr) {
-      cr.classList.toggle('active', activeCategory !== null && cr.getAttribute('data-category') === activeCategory);
+      var c = cr.getAttribute('data-category');
+      cr.classList.toggle('active', activeCategory !== null && c === activeCategory);
+      cr.querySelector('.cat-count').textContent = catTally[c] || 0;
     });
     document.querySelectorAll('.sev-row').forEach(function (sr) {
-      sr.classList.toggle('active', activeSeverity !== null && sr.getAttribute('data-severity') === activeSeverity);
+      var s = sr.getAttribute('data-severity');
+      sr.classList.toggle('active', activeSeverity !== null && s === activeSeverity);
+      sr.querySelector('.sev-count').textContent = sevTally[s] || 0;
     });
 
     var note = document.getElementById('filterNote');
