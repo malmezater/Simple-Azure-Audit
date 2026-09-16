@@ -41,6 +41,34 @@ function Get-AzGovVizScriptPath {
     return $null
 }
 
+function Get-AzGovVizPatchedScript {
+    <#
+      Microsoft has retired classic subscription administrators, and the classicAdministrators API now
+      returns 404 InvalidResourceType. AzGovViz 6.7.x (with AzAPICall 1.4.x) treats that as fatal and
+      stops the whole run. This writes a copy of AzGovVizParallel.ps1 next to the original where that one
+      API call continues quietly instead. The original file is left untouched, and when a future
+      AzGovViz version no longer contains the call, the original script is used as is.
+    #>
+    param([Parameter(Mandatory)][string]$ScriptPath)
+
+    $text = Get-Content -Path $ScriptPath -Raw
+    $pattern = '(?m)^(?<indent>[ \t]*)currentTask\s*=\s*"classicAdministrators [^\r\n]*\r?\n'
+    $match = [regex]::Match($text, $pattern)
+    if (-not $match.Success) {
+        return $ScriptPath
+    }
+
+    $indent  = $match.Groups['indent'].Value
+    $newline = if ($match.Value.EndsWith("`r`n")) { "`r`n" } else { "`n" }
+    $patched = $text.Insert($match.Index + $match.Length,
+        "$indent" + "unhandledErrorAction   = 'ContinueQuiet' # SimpleAzureAudit: classic administrators API is retired$newline")
+
+    $target = Join-Path (Split-Path $ScriptPath) "AzGovVizParallel.SimpleAzureAudit.ps1"
+    Set-Content -Path $target -Value $patched -Encoding utf8BOM -NoNewline
+    Write-Step "  Using patched AzGovViz copy (retired classicAdministrators API is skipped)." "Gray"
+    return $target
+}
+
 function Invoke-AzGovVizScan {
     param(
         [Parameter(Mandatory)][string]$RawFolder,
@@ -64,14 +92,18 @@ function Invoke-AzGovVizScan {
     $versionFile = Join-Path (Split-Path (Split-Path $scriptPath)) "version.json"
     $version = if (Test-Path $versionFile) { "$(Get-PropValue (Read-JsonFile $versionFile) 'ProductVersion')" } else { "" }
 
+    $runScript = Get-AzGovVizPatchedScript -ScriptPath $scriptPath
+
+    # -NoALZPolicyVersionChecker: that feature needs git (to clone Enterprise-Scale) and is not used here.
     $script = @"
-& $(ConvertTo-PSLiteral $scriptPath) ``
+& $(ConvertTo-PSLiteral $runScript) ``
     -ManagementGroupId $(ConvertTo-PSLiteral $ManagementGroupId) ``
     -SubscriptionId4AzContext $(ConvertTo-PSLiteral $SubscriptionIds[0]) ``
     -TenantId4AzContext $(ConvertTo-PSLiteral $TenantId) ``
     -SubscriptionIdWhitelist $(ConvertTo-PSArrayLiteral $SubscriptionIds) ``
     -OutputPath $(ConvertTo-PSLiteral $RawFolder) ``
     -NoPIMEligibility ``
+    -NoALZPolicyVersionChecker ``
     -StatsOptOut
 "@
 

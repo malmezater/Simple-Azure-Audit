@@ -23,11 +23,17 @@ function Invoke-ARIScan {
         return
     }
 
+    # ARI finishes the workbook through Excel COM automation. Without Excel installed that step
+    # fails (REGDB_E_CLASSNOTREG) after the report is already written, so use -Lite, which skips it.
+    $hasExcel = $IsWindows -and [bool][type]::GetTypeFromProgID("Excel.Application")
+    $liteArg  = if ($hasExcel) { "" } else { " -Lite" }
+    if (-not $hasExcel) { Write-Step "  Excel is not installed - running ARI with -Lite (no Excel COM styling)." "Gray" }
+
     # Advisor and Defender data are already covered by the other checks, so ARI stays an inventory.
     $script = @"
 Import-Module AzureResourceInventory -ErrorAction Stop
 Invoke-ARI -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionID $(ConvertTo-PSArrayLiteral $SubscriptionIds) ``
-    -ReportDir $(ConvertTo-PSLiteral $RawFolder) -ReportName 'ARI' -IncludeTags -SkipAdvisory -NoAutoUpdate
+    -ReportDir $(ConvertTo-PSLiteral $RawFolder) -ReportName 'ARI' -IncludeTags -SkipAdvisory -NoAutoUpdate$liteArg
 "@
 
     Write-Step "  Running Invoke-ARI..." "Gray"

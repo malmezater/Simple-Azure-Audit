@@ -36,8 +36,21 @@ Set-AzContext -Subscription $(ConvertTo-PSLiteral $SubscriptionIds[0]) -Tenant $
 Write-Host 'Exporting resource configuration (Export-AzRuleData)...'
 Export-AzRuleData -Subscription $(ConvertTo-PSArrayLiteral $SubscriptionIds) -OutputPath `$export | Out-Null
 
+`$files = @(Get-ChildItem -Path `$export -Filter '*.json' -File)
+Write-Host "Exported `$(`$files.Count) file(s). PSRule `$((Get-Module PSRule).Version), PSRule.Rules.Azure `$((Get-Module PSRule.Rules.Azure).Version)"
+
 Write-Host 'Evaluating rules (Invoke-PSRule)...'
+# PSRule v3 no longer reads JSON input files unless the JSON format is enabled (all formats are
+# off by default). The environment variable is ignored by v2, which detects the format itself.
+`$env:PSRULE_FORMAT_JSON_ENABLED = 'true'
 `$results = @(Invoke-PSRule -InputPath `$export -Module 'PSRule.Rules.Azure' -Outcome Fail, Pass -WarningAction SilentlyContinue)
+
+if (`$results.Count -eq 0 -and `$files.Count -gt 0) {
+    # Fallback: read the exported resources and pass them in as objects.
+    Write-Host 'No results from -InputPath; evaluating exported objects directly...'
+    `$objects = foreach (`$f in `$files) { Get-Content -Path `$f.FullName -Raw | ConvertFrom-Json -Depth 100 | ForEach-Object { `$_ } }
+    `$results = @(`$objects | Invoke-PSRule -Module 'PSRule.Rules.Azure' -Outcome Fail, Pass -WarningAction SilentlyContinue)
+}
 
 `$rows = foreach (`$r in `$results) {
     `$ann = `$r.Info.Annotations
@@ -67,10 +80,11 @@ Remove-Item -Path `$export -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Step "  Exporting and evaluating resources with PSRule for Azure..." "Gray"
     $r = Invoke-ToolProcess -Name "PSRule" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
-    $hasOutput = Test-Path $resultsPath
+    # An empty result set means nothing was evaluated (a subscription always yields some passes).
+    $hasOutput = (Test-Path $resultsPath) -and @(Read-JsonFile $resultsPath).Count -gt 0
     Save-ToolRunState -RawFolder $RawFolder -State @{
         Status = $(if ($hasOutput) { "Succeeded" } else { "Failed" })
-        Message = $(if (-not $hasOutput) { "No PSRule results produced (exit code $($r.ExitCode)) - see logs/psrule.log." } else { "" })
+        Message = $(if (-not $hasOutput) { "PSRule produced no rule results (exit code $($r.ExitCode)) - see logs/psrule.log." } else { "" })
         DurationSeconds = $r.DurationSeconds
         Version = (Get-ModuleVersionString "PSRule.Rules.Azure")
     }

@@ -262,6 +262,12 @@ src/
 | **WARA failed** | `Start-WARACollector` refuses to run when a newer module exists in PowerShell Gallery – run `Update-Module WARA`. |
 | **PSRule failed** | `Export-AzRuleData` needs Reader on the subscription; see `logs\psrule.log`. Large subscriptions can take a while. |
 | **AzGovViz failed / partial** | Reader on the management group is required. Use `-ManagementGroupId` for a management group you can read, or `-ExcludeTools AzGovViz`. See `logs\azgovviz.log`. |
+| **Prowler: `UnicodeEncodeError: 'charmap' codec`** | Fixed in the script (Prowler now runs with UTF-8 output). Update to the latest files. |
+| **AzGovViz: `classicAdministrators ... 404 InvalidResourceType`** | Microsoft retired classic administrators and AzGovViz stops on the error. The script runs a patched copy (`AzGovVizParallel.SimpleAzureAudit.ps1`) that skips that call; the original file is untouched. |
+| **PSRule: "0 rule results written"** | PSRule v3 ignores JSON input files unless the JSON format is enabled. The script enables it and falls back to passing the exported objects directly. |
+| **Maester: `Connect-MgGraph: Method not found ... InteractiveBrowserCredential`** | Az.Accounts and Microsoft.Graph.Authentication load different Azure.Identity versions. The script now signs in to Graph before Az is loaded. |
+| **ARI: `80040154 Class not registered`** | Excel is not installed, so ARI's COM styling step fails. The script uses `-Lite` automatically when Excel is missing; the Excel inventory is written either way. |
+| **WARA: "No recommendation found for ..."** | Informational – WARA has no rules for that resource type (e.g. WAF policies). The collection still completes. |
 | **Maester has few results** | The account needs Global Reader; Exchange/Teams tests are skipped because only Azure and Graph are connected. |
 | **Prowler asks for a browser sign-in** | Run `az login --tenant <tenant>` first to let Prowler reuse the CLI session. |
 | **"Could not fetch Advisor data"** | Install `Az.Advisor` or run with `-SkipAdvisor`. |

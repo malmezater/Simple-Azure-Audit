@@ -48,19 +48,37 @@ function Invoke-ProwlerScan {
         "--output-formats", "csv", "json-ocsf", "html",
         "--output-directory", $RawFolder,
         "--output-filename", "prowler",
-        "--no-banner"
+        "--no-banner",
+        "--no-color"
     )
 
     Write-Step "  Running: prowler $($prowlerArgs -join ' ')" "Gray"
     $log = Join-Path $LogDirectory "prowler.log"
+
+    # When stdout is piped, Python on Windows falls back to the ANSI code page (cp1252) and
+    # Prowler's progress bar crashes with UnicodeEncodeError. Force UTF-8 for the child process
+    # and decode its output as UTF-8 on this side.
+    $savedEnv = @{ PYTHONUTF8 = $env:PYTHONUTF8; PYTHONIOENCODING = $env:PYTHONIOENCODING }
+    $savedEncoding = [Console]::OutputEncoding
+    $env:PYTHONUTF8 = "1"
+    $env:PYTHONIOENCODING = "utf-8"
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    & $prowlerExe @prowlerArgs 2>&1 | Tee-Object -FilePath $log | Out-Host
-    $exit = $LASTEXITCODE
-    $sw.Stop()
+    try {
+        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        & $prowlerExe @prowlerArgs 2>&1 | Tee-Object -FilePath $log | Out-Host
+        $exit = $LASTEXITCODE
+    }
+    finally {
+        $sw.Stop()
+        [Console]::OutputEncoding = $savedEncoding
+        $env:PYTHONUTF8 = $savedEnv.PYTHONUTF8
+        $env:PYTHONIOENCODING = $savedEnv.PYTHONIOENCODING
+    }
 
     # Exit code 3 means "scan completed and at least one check failed".
-    $status  = if ($exit -in 0, 3) { "Succeeded" } else { "Failed" }
-    $message = if ($status -eq "Failed") { "prowler exited with code $exit - see logs/prowler.log" } else { "" }
+    $hasOutput = [bool](Get-LatestFile -Path $RawFolder -Filter "*.ocsf.json" -Recurse)
+    $status  = if (($exit -in 0, 3) -and $hasOutput) { "Succeeded" } else { "Failed" }
+    $message = if ($status -eq "Failed") { "prowler exited with code $exit$(if (-not $hasOutput) { ' without writing results' }) - see logs/prowler.log" } else { "" }
     Save-ToolRunState -RawFolder $RawFolder -State @{
         Status = $status; Message = $message; DurationSeconds = $sw.Elapsed.TotalSeconds; Version = $version; ExitCode = $exit
     }

@@ -29,9 +29,18 @@ function Invoke-MaesterScan {
     }
 
     $testsPath = Join-Path $ToolsPath "maester-tests"
+    # Microsoft Graph must sign in before anything loads Az.Accounts. Both modules ship
+    # Azure.Identity, and whichever loads first wins; with Az.Accounts first, Connect-MgGraph
+    # fails with "Method not found: ... InteractiveBrowserCredential.Authenticate". So Graph is
+    # connected explicitly first, and Connect-Maester then only attaches the existing Az context.
     $script = @"
+Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop
 Import-Module Maester -ErrorAction Stop
+Connect-MgGraph -Scopes (Get-MtGraphScope) -TenantId $(ConvertTo-PSLiteral $TenantId) -NoWelcome -ErrorAction Stop
+if (-not (Get-MgContext)) { throw 'Not connected to Microsoft Graph.' }
+Write-Host "Connected to Microsoft Graph as `$((Get-MgContext).Account)"
+
 `$tests = $(ConvertTo-PSLiteral $testsPath)
 if (-not (Test-Path (Join-Path `$tests '*'))) {
     New-Item -ItemType Directory -Force -Path `$tests | Out-Null
@@ -39,7 +48,8 @@ if (-not (Test-Path (Join-Path `$tests '*'))) {
 } else {
     try { Update-MaesterTests -Path `$tests } catch { Write-Host "Could not update Maester tests: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow }
 }
-Connect-Maester -Service Azure,Graph -TenantId $(ConvertTo-PSLiteral $TenantId)
+try { Connect-Maester -Service Azure -TenantId $(ConvertTo-PSLiteral $TenantId) }
+catch { Write-Host "Azure connection for Maester failed, Azure tests will be skipped: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow }
 Invoke-Maester -Path `$tests -OutputFolder $(ConvertTo-PSLiteral $RawFolder) -OutputFolderFileName 'maester' -NonInteractive -NoLogo -SkipGraphConnect
 "@
 
