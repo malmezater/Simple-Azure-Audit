@@ -5,7 +5,7 @@
 # CISA/CIS, Azure) in a child process and imports the JSON results.
 #
 # Install: Install-Module Maester, Pester -Scope CurrentUser
-# Auth:    Connect-MgGraph (interactive, delegated) + the Az context saved by the main script.
+# Auth:    Connect-MgGraph (interactive, delegated) + an ARM token handed over by the main script.
 #          Needs a user that can read the directory and Conditional Access policies
 #          (Global Reader is recommended).
 # ─────────────────────────────────────────────────────────────
@@ -54,34 +54,79 @@ if (-not (Test-Path (Join-Path `$tests '*'))) {
     Write-Host 'Maester tests were updated within the last 24 hours - skipping update.'
 }
 
-# Azure tests reuse the Az context saved by the main script. Check it explicitly so the log says
-# why Azure tests are skipped instead of Maester silently reporting 'Not connected to Azure'.
+# Azure tests: once Microsoft.Graph.Authentication is loaded, Az.Accounts can no longer refresh
+# the saved sign-in silently ("User interaction is required"). The main script therefore hands over a
+# short-lived ARM access token in an environment variable, which is used for this process only
+# (autosave disabled, so the saved context the other tools use is not touched).
+`$armToken = `$env:SIMPLEAZUREAUDIT_ARM_TOKEN
+`$armAccount = `$env:SIMPLEAZUREAUDIT_ARM_ACCOUNT
+Remove-Item Env:\SIMPLEAZUREAUDIT_ARM_TOKEN, Env:\SIMPLEAZUREAUDIT_ARM_ACCOUNT -ErrorAction SilentlyContinue
 try {
+    if (-not `$armToken) { throw 'the main script could not get an Azure token (see the console output before this tool started)' }
     Import-Module Az.Accounts -ErrorAction Stop
-    `$azCtx = Get-AzContext -ErrorAction Stop
-    if (-not `$azCtx) { throw 'no saved Az context was found (Connect-AzAccount)' }
-    if (`$azCtx.Tenant.Id -ne $(ConvertTo-PSLiteral $TenantId)) {
-        `$azCtx = Set-AzContext -Tenant $(ConvertTo-PSLiteral $TenantId) -ErrorAction Stop
-    }
+    Disable-AzContextAutosave -Scope Process | Out-Null
+    `$tokenParam = if ((Get-Command Connect-AzAccount).Parameters['AccessToken'].ParameterType -eq [securestring]) {
+        ConvertTo-SecureString -String `$armToken -AsPlainText -Force
+    } else { `$armToken }
+    Connect-AzAccount -AccessToken `$tokenParam -AccountId `$armAccount -Tenant $(ConvertTo-PSLiteral $TenantId) -ErrorAction Stop -WarningAction SilentlyContinue | Out-Null
     `$probe = Invoke-AzRestMethod -Method GET -Path 'subscriptions?api-version=2022-12-01' -ErrorAction Stop
     if (`$probe.StatusCode -ge 400) { throw "Azure Resource Manager returned HTTP `$(`$probe.StatusCode): `$(`$probe.Content)" }
     Connect-Maester -Service Azure -TenantId $(ConvertTo-PSLiteral $TenantId)
-    Write-Host "Connected to Azure as `$(`$azCtx.Account.Id)"
+    Write-Host "Connected to Azure as `$armAccount"
 }
 catch {
     Write-Host "Azure tests will be skipped - Azure connection failed: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow
 }
-Invoke-Maester -Path `$tests -OutputFolder $(ConvertTo-PSLiteral $RawFolder) -OutputFolderFileName 'maester' -NonInteractive -NoLogo -SkipGraphConnect
+finally {
+    `$armToken = `$null; `$tokenParam = `$null
+}
+
+Write-Host 'Running Maester tests - this usually takes 10-20 minutes and shows only a progress bar...'
+`$ProgressPreference = 'Continue'
+`$mt = Invoke-Maester -Path `$tests -OutputFolder $(ConvertTo-PSLiteral $RawFolder) -OutputFolderFileName 'maester' -NonInteractive -NoLogo -SkipGraphConnect -PassThru
+`$ProgressPreference = 'SilentlyContinue'
+if (`$mt) {
+    Write-Host ("Maester: {0} passed, {1} failed, {2} investigate, {3} skipped, {4} errors, {5} total" -f `$mt.PassedCount, `$mt.FailedCount, `$mt.InvestigateCount, `$mt.SkippedCount, `$mt.ErrorCount, `$mt.TotalCount)
+}
 "@
 
-    Write-Step "  Starting Maester (a browser sign-in to Microsoft Graph may open)..." "Gray"
-    $r = Invoke-ToolProcess -Name "Maester" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
+    # Short-lived ARM token for Maester's Azure tests (see the comment in the child script).
+    # Passed through the environment so it never ends up in the generated script or the transcript.
+    $armToken = Get-AuditArmToken -TenantId $TenantId
+    Write-Step "  Starting Maester (a browser sign-in to Microsoft Graph may open, possibly behind other windows)..." "Gray"
+    try {
+        if ($armToken) {
+            $env:SIMPLEAZUREAUDIT_ARM_TOKEN   = $armToken.Token
+            $env:SIMPLEAZUREAUDIT_ARM_ACCOUNT = $armToken.Account
+        }
+        $r = Invoke-ToolProcess -Name "Maester" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
+    }
+    finally {
+        Remove-Item Env:\SIMPLEAZUREAUDIT_ARM_TOKEN, Env:\SIMPLEAZUREAUDIT_ARM_ACCOUNT -ErrorAction SilentlyContinue
+        $armToken = $null
+    }
     $status = if ($r.ExitCode -eq 0) { "Succeeded" } else { "Failed" }
     Save-ToolRunState -RawFolder $RawFolder -State @{
         Status = $status
         Message = $(if ($status -eq "Failed") { "Maester exited with code $($r.ExitCode) - see logs/maester.log" } else { "" })
         DurationSeconds = $r.DurationSeconds
         Version = (Get-ModuleVersionString "Maester")
+    }
+}
+
+function Get-AuditArmToken {
+    # Returns @{ Token; Account } for Azure Resource Manager from the main script's Az session, or $null.
+    param([Parameter(Mandatory)][string]$TenantId)
+    try {
+        $ctx = Get-AzContext -ErrorAction Stop
+        if (-not $ctx) { throw "no Az context" }
+        $t = Get-AzAccessToken -ResourceUrl "https://management.azure.com/" -TenantId $TenantId -AsSecureString -ErrorAction Stop -WarningAction SilentlyContinue
+        $plain = if ($t.Token -is [securestring]) { [System.Net.NetworkCredential]::new("", $t.Token).Password } else { "$($t.Token)" }
+        return @{ Token = $plain; Account = "$($ctx.Account.Id)" }
+    }
+    catch {
+        Write-Step "  Could not get an Azure token for Maester's Azure tests: $($_.Exception.Message)" "DarkYellow"
+        return $null
     }
 }
 
