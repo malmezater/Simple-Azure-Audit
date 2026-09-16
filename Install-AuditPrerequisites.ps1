@@ -6,8 +6,8 @@
 
 .DESCRIPTION
     Intended for provisioning a dedicated audit workstation (e.g. a PAW built with PAWDeploy).
-    Winget apps (PowerShell 7, Azure CLI, Python) are expected to be installed first -
-    see PAWDeploy-AzureAudit.xml. This script then installs:
+    Apps are expected to be installed first (winget: Microsoft.PowerShell, Microsoft.AzureCLI,
+    Python.Python.3.12). This script then installs:
 
       1. PowerShell modules  (Az, Microsoft.Graph.Authentication, Pester, Maester, PSRule.Rules.Azure,
                               WARA, AzureResourceInventory, ImportExcel, AzAPICall)

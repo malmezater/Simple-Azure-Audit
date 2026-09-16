@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Azure assessment - Northwind Traders AB (DEMO)</title>
+<style>
+:root{
+  color-scheme: light;
+  --page:#f6f6f3; --surface:#fcfcfb; --surface-2:#f1f0ec; --border:rgba(11,11,11,.10); --border-strong:rgba(11,11,11,.18);
+  --ink:#0b0b0b; --ink-2:#52514e; --muted:#6f6d68; --grid:#e1e0d9; --axis:#c3c2b7;
+  --accent:#1c5cab; --accent-ink:#ffffff; --accent-wash:rgba(42,120,214,.10); --link:#1c5cab;
+  --sev-critical:#6e1414; --sev-high:#a82424; --sev-medium:#d9483b; --sev-low:#ef8a7c; --sev-info:#b9b8b1;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+  --meter-track:#cde2fb; --meter-fill:#2a78d6;
+  --shadow:0 1px 2px rgba(0,0,0,.04);
+  --radius:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --surface-2:#232321; --border:rgba(255,255,255,.10); --border-strong:rgba(255,255,255,.18);
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#9a988f; --grid:#2c2c2a; --axis:#383835;
+    --accent:#3987e5; --accent-ink:#0b0b0b; --accent-wash:rgba(57,135,229,.16); --link:#6da7ec;
+    --sev-critical:#f5a598; --sev-high:#e5645a; --sev-medium:#c9352f; --sev-low:#9b1f1f; --sev-info:#4a4a47;
+    --meter-track:#184f95; --meter-fill:#6da7ec;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --page:#0d0d0d; --surface:#1a1a19; --surface-2:#232321; --border:rgba(255,255,255,.10); --border-strong:rgba(255,255,255,.18);
+  --ink:#ffffff; --ink-2:#c3c2b7; --muted:#9a988f; --grid:#2c2c2a; --axis:#383835;
+  --accent:#3987e5; --accent-ink:#0b0b0b; --accent-wash:rgba(57,135,229,.16); --link:#6da7ec;
+  --sev-critical:#f5a598; --sev-high:#e5645a; --sev-medium:#c9352f; --sev-low:#9b1f1f; --sev-info:#4a4a47;
+  --meter-track:#184f95; --meter-fill:#6da7ec;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:1320px;margin:0 auto;padding:0 24px}
+@media (max-width:640px){.wrap{padding:0 16px}}
+
+/* Header */
+.masthead{background:var(--surface);border-bottom:1px solid var(--border)}
+.masthead .wrap{padding-top:28px;padding-bottom:20px;display:flex;gap:24px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+h1{font-size:28px;line-height:1.2;margin:0;font-weight:650;letter-spacing:-.01em}
+.meta{margin:8px 0 0;color:var(--ink-2);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 18px}
+.meta span{white-space:nowrap}
+@media (max-width:640px){.meta span{white-space:normal}.meta code{word-break:break-all}}
+.meta code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted)}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--border-strong);background:var(--surface);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+
+/* Tabs */
+.tabs{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border)}
+.tabs .wrap{display:flex;gap:4px;overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:12px 14px;cursor:pointer;color:var(--ink-2);font-weight:550;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .count{color:var(--muted);font-weight:400;margin-left:4px}
+
+main.wrap{padding-top:24px;padding-bottom:48px}
+section[hidden]{display:none}
+.grid{display:grid;gap:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-pad{padding:18px 20px}
+.card h2{font-size:15px;margin:0;font-weight:650}
+.card .sub{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+
+/* Summary */
+.summary{display:grid;grid-template-columns:minmax(260px,1.1fr) 2fr;gap:16px;margin-bottom:16px}
+@media (max-width:900px){.summary{grid-template-columns:1fr}}
+.hero .label{color:var(--ink-2);font-size:13px;margin:0}
+.hero .value{font-size:56px;font-weight:650;line-height:1.05;margin:6px 0 4px;letter-spacing:-.02em}
+.hero .note{color:var(--muted);font-size:13px;margin:0}
+.hero .verdict{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);color:var(--ink-2);font-size:13.5px}
+.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:520px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.tile{padding:14px 16px;cursor:pointer;text-align:left;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius)}
+.tile:hover{border-color:var(--border-strong);background:var(--surface-2)}
+.tile .t-label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.tile .t-value{font-size:28px;font-weight:650;line-height:1.15;margin-top:4px}
+.tile .t-sub{font-size:12px;color:var(--muted)}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none}
+.sw-Critical{background:var(--sev-critical)} .sw-High{background:var(--sev-high)} .sw-Medium{background:var(--sev-medium)} .sw-Low{background:var(--sev-low)} .sw-Info{background:var(--sev-info)}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+@media (max-width:520px){.facts{grid-template-columns:1fr}}
+.fact{padding:12px 16px}
+.fact .t-label{font-size:12.5px;color:var(--ink-2)}
+.fact .t-value{font-size:20px;font-weight:650}
+
+/* Severity pill */
+.sev{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:550;white-space:nowrap;color:var(--ink)}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:999px;padding:1px 8px;font-size:12px;color:var(--ink-2);background:var(--surface-2);white-space:nowrap}
+
+/* Charts */
+.two-col{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px}
+@media (max-width:1000px){.two-col{grid-template-columns:1fr}}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.seg-toggle{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+.seg-toggle button{background:var(--surface);border:0;padding:5px 10px;cursor:pointer;font-size:12.5px;color:var(--ink-2)}
+.seg-toggle button[aria-pressed="true"]{background:var(--accent-wash);color:var(--ink);font-weight:600}
+.bars{display:grid;grid-template-columns:max-content 1fr;gap:10px 14px;align-items:center;margin-top:14px}
+.bar-label{font-size:13px;color:var(--ink);background:none;border:0;padding:0;text-align:left;cursor:pointer}
+.bar-label:hover{text-decoration:underline}
+.bar-track{display:flex;align-items:center;gap:8px;min-width:0}
+.bar-stack{display:flex;gap:2px;height:18px;min-width:2px}
+.bar-seg{height:100%;cursor:pointer;outline:none}
+.bar-seg:first-child{border-radius:0}
+.bar-seg:last-child{border-radius:0 4px 4px 0}
+.bar-seg:hover,.bar-seg:focus-visible{filter:brightness(1.12)}
+.bar-value{font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tooltip{position:fixed;z-index:50;pointer-events:none;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.14);max-width:280px}
+.tooltip strong{display:block;font-size:14px}
+.tooltip .tt-key{display:inline-block;width:12px;height:2px;margin-right:6px;vertical-align:middle}
+
+/* Tables */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-strong);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+tbody tr.clickable{cursor:pointer}
+tbody tr.clickable:hover td{background:var(--surface-2)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all}
+.muted{color:var(--muted)}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Tools */
+.tool-list{display:grid;gap:0}
+.tool{display:grid;grid-template-columns:minmax(150px,1fr) 120px minmax(160px,1.2fr) 80px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+.tool:last-child{border-bottom:0}
+@media (max-width:640px){.tool{grid-template-columns:1fr 1fr}}
+.tool-name{font-weight:600}
+.tool-desc{font-size:12px;color:var(--muted)}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.status i{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.st-ok i{background:var(--good)} .st-warn i{background:var(--warning)} .st-bad i{background:var(--critical)} .st-off i{background:var(--sev-info)}
+.meter{height:8px;border-radius:4px;background:var(--meter-track);overflow:hidden}
+.meter>div{height:100%;background:var(--meter-fill);border-radius:4px}
+.meter-label{font-size:12px;color:var(--ink-2);margin-top:4px;font-variant-numeric:tabular-nums}
+
+/* Filters */
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.filters input[type=search]{flex:1 1 240px;min-width:180px;border:1px solid var(--border-strong);background:var(--surface);border-radius:8px;padding:7px 10px}
+.filters select{border:1px solid var(--border-strong);background:var(--surface);border-radius:8px;padding:7px 8px;max-width:220px}
+.sev-filter{display:inline-flex;gap:4px;flex-wrap:wrap}
+.sev-filter button{border:1px solid var(--border-strong);background:var(--surface);border-radius:999px;padding:4px 10px;cursor:pointer;font-size:12.5px;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.sev-filter button[aria-pressed="true"]{background:var(--accent-wash);border-color:var(--accent);color:var(--ink)}
+.result-line{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;color:var(--ink-2);font-size:13px}
+
+/* Issue groups */
+.issues{display:grid;gap:8px}
+details.issue{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+details.issue[open]{border-color:var(--border-strong)}
+details.issue summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:center;padding:12px 16px}
+details.issue summary::-webkit-details-marker{display:none}
+details.issue summary:hover{background:var(--surface-2);border-radius:var(--radius)}
+.issue-title{font-weight:600;line-height:1.35}
+.issue-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.issue-count{font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.issue-body{padding:0 16px 16px 124px}
+@media (max-width:640px){details.issue summary{grid-template-columns:1fr auto}.issue-sev{grid-column:1/-1}.issue-body{padding:0 16px 16px}}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 14px;margin:6px 0 14px;font-size:13.5px}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+@media (max-width:640px){.kv{grid-template-columns:1fr}}
+.more{display:flex;justify-content:center;margin-top:12px}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+
+/* Method */
+.prose{max-width:860px;color:var(--ink-2)}
+.prose h3{color:var(--ink);font-size:14px;margin:18px 0 6px}
+.prose p{margin:0 0 10px}
+footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px solid var(--border)}
+
+@media print{
+  body{background:#fff}
+  .tabs,.head-actions,.filters,.more,.seg-toggle,.no-print{display:none!important}
+  section[hidden]{display:block!important}
+  section{break-before:page}
+  section:first-of-type{break-before:auto}
+  .card,details.issue{break-inside:avoid;box-shadow:none}
+  details.issue .issue-body{display:none}
+  .bar-seg,.swatch,.meter>div,.status i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<script type="application/json" id="audit-data">{"meta":{"customerName":"Northwind Traders AB (DEMO)","preparedBy":"Company Name","subscriptionName":"2 subscriptions","subscriptionId":"","subscriptions":[{"id":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","name":"nwt-prod-001"},{"id":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","name":"nwt-dev-001"}],"tenantId":"8f2d6c1a-4b7e-4e3a-9c51-2a7d0e9b6f14","generated":"2026-09-16 10:00","scriptVersion":"2.0.0","fileBaseName":"Demo_AzureAudit_Report"},"tools":[{"Tool":"Native","Status":"Succeeded","Scope":"Subscriptions: nwt-prod-001, nwt-dev-001","Description":"Built-in checks (NSG, RBAC, cost, encryption, Key Vault, storage, tagging, Azure Advisor)","Message":"","Version":"2.0.0","DurationSeconds":94.0,"Passed":-1,"Failed":-1,"Total":-1,"FindingCount":21,"Reports":[]},{"Tool":"Prowler","Status":"Succeeded","Scope":"Subscriptions: nwt-prod-001, nwt-dev-001","Description":"Prowler - CIS / NIST / ISO security posture checks for Azure and Entra ID","Message":"","Version":"5.x","DurationSeconds":211.0,"Passed":612,"Failed":214,"Total":826,"FindingCount":46,"Reports":[]},{"Tool":"Maester","Status":"Succeeded","Scope":"Tenant: Northwind Traders (demo)","Description":"Maester - Entra ID, Conditional Access, EIDSCA and CISA identity tests","Message":"","Version":"2.x","DurationSeconds":780.0,"Passed":148,"Failed":41,"Total":189,"FindingCount":9,"Reports":[]},{"Tool":"PSRule","Status":"Succeeded","Scope":"Subscriptions: 2","Description":"PSRule for Azure - Well-Architected rules (all five pillars) evaluated against the live resource configuration","Message":"","Version":"1.x","DurationSeconds":402.0,"Passed":438,"Failed":97,"Total":535,"FindingCount":25,"Reports":[]},{"Tool":"AzGovViz","Status":"Succeeded","Scope":"Management group: tenant root (2 subscriptions)","Description":"Azure Governance Visualizer - RBAC, policy, orphaned resources and Defender plan coverage","Message":"","Version":"6.x","DurationSeconds":655.0,"Passed":-1,"Failed":-1,"Total":-1,"FindingCount":9,"Reports":[]},{"Tool":"WARA","Status":"Succeeded","Scope":"Subscriptions: nwt-prod-001, nwt-dev-001","Description":"Well-Architected Reliability Assessment (Microsoft APRL) - reliability recommendations and retirements","Message":"","Version":"1.x","DurationSeconds":48.0,"Passed":-1,"Failed":-1,"Total":-1,"FindingCount":4,"Reports":[]},{"Tool":"ARI","Status":"Succeeded","Scope":"Subscriptions: nwt-prod-001, nwt-dev-001","Description":"Azure Resource Inventory - Excel inventory and network topology diagram (appendix)","Message":"","Version":"3.x","DurationSeconds":136.0,"Passed":-1,"Failed":-1,"Total":-1,"FindingCount":0,"Reports":[]}],"findings":[{"Source":"Native","Category":"Security","Severity":"Critical","CheckId":"NATIVE-SEC-001","Title":"NSG allows RDP/SSH from the internet","Resource":"nsg-erp-prod-we","ResourceType":"Microsoft.Network/networkSecurityGroups","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Network/networkSecurityGroups/nsg-erp-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"nsg-erp-prod-we has an inbound rule allowing 3389/22 from 0.0.0.0/0.","Recommendation":"Remove the rule and use Azure Bastion or just-in-time VM access.","Reference":"https://learn.microsoft.com/azure/bastion/bastion-overview","Frameworks":"CIS 6.1, 6.2"},{"Source":"Native","Category":"Security","Severity":"Critical","CheckId":"NATIVE-SEC-001","Title":"NSG allows RDP/SSH from the internet","Resource":"nsg-jumpbox-dev-we","ResourceType":"Microsoft.Network/networkSecurityGroups","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Network/networkSecurityGroups/nsg-jumpbox-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"nsg-jumpbox-dev-we has an inbound rule allowing 3389/22 from 0.0.0.0/0.","Recommendation":"Remove the rule and use Azure Bastion or just-in-time VM access.","Reference":"https://learn.microsoft.com/azure/bastion/bastion-overview","Frameworks":"CIS 6.1, 6.2"},{"Source":"Maester","Category":"Identity","Severity":"High","CheckId":"MT.1005","Title":"All Conditional Access policies should exclude at least one emergency access account","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"2 of 11 enabled policies do not exclude an emergency access account.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"High","CheckId":"MT.1008","Title":"App registrations should not have expired or soon-to-expire secrets","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"3 application secrets expire within 30 days.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"High","CheckId":"EIDSCA.AF01","Title":"Authentication Method - FIDO2 security key - State","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"FIDO2 security keys are not enabled as an authentication method.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"High","CheckId":"CIS.M365.1.1.3","Title":"Ensure that between two and four global admins are designated","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The tenant has 7 permanent Global Administrators.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"Prowler","Category":"Identity","Severity":"High","CheckId":"entra_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all privileged users","Resource":"admin.legacy@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"A user with the Global Administrator role has no MFA method registered.","Recommendation":"Register phishing-resistant MFA for all admins.","Reference":"","Frameworks":"CIS-3.0: 1.1.1"},{"Source":"AzGovViz","Category":"Identity","Severity":"High","CheckId":"AZGOVVIZ-RBAC-OwnerSP","Title":"Owner role assigned to a service principal","Resource":"sp-github-deploy","ResourceType":"Service principal","ResourceId":"","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The service principal \u0027sp-github-deploy\u0027 has Owner on nwt-prod-001.","Recommendation":"Grant Contributor plus a scoped User Access Administrator role, or use workload identity federation with least privilege.","Reference":"","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"High","CheckId":"CISA.MS.AAD.3.1","Title":"Phishing-resistant MFA SHALL be enforced for all users","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"No Conditional Access policy requires phishing-resistant authentication strength.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"WARA","Category":"Reliability","Severity":"High","CheckId":"WARA-273f6b30-68e0-4241-85ea-acf15ffb60bf","Title":"Deploy VMs across Availability Zones","Resource":"vm-erp-prod-02","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Compute/virtualMachines/vm-erp-prod-02","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"vm-erp-prod-02 is not zonal.","Recommendation":"Use availability zones or a VM scale set with zone balancing.","Reference":"https://azure.github.io/Azure-Proactive-Resiliency-Library-v2/","Frameworks":""},{"Source":"WARA","Category":"Reliability","Severity":"High","CheckId":"WARA-273f6b30-68e0-4241-85ea-acf15ffb60bf","Title":"Deploy VMs across Availability Zones","Resource":"vm-jumpbox-dev-01","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Compute/virtualMachines/vm-jumpbox-dev-01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"vm-jumpbox-dev-01 is not zonal.","Recommendation":"Use availability zones or a VM scale set with zone balancing.","Reference":"https://azure.github.io/Azure-Proactive-Resiliency-Library-v2/","Frameworks":""},{"Source":"Azure Advisor","Category":"Reliability","Severity":"High","CheckId":"ADVISOR-availability-zones","Title":"Use Availability Zones for better resiliency","Resource":"vm-erp-prod-01","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Compute/virtualMachines/vm-erp-prod-01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The VM is deployed without zone redundancy.","Recommendation":"Deploy the workload across availability zones.","Reference":"","Frameworks":""},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"keyvault_rbac_enabled","Title":"Enable Role Based Access Control for Azure Key Vault","Resource":"kv-orders-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.KeyVault/vaults/kv-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Key Vault kv-orders-prod-we uses access policies instead of Azure RBAC.","Recommendation":"Switch the permission model to Azure role-based access control.","Reference":"","Frameworks":"CIS-3.0: 8.6"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"keyvault_rbac_enabled","Title":"Enable Role Based Access Control for Azure Key Vault","Resource":"kv-webshop-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.KeyVault/vaults/kv-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Key Vault kv-webshop-prod-we uses access policies instead of Azure RBAC.","Recommendation":"Switch the permission model to Azure role-based access control.","Reference":"","Frameworks":"CIS-3.0: 8.6"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"sqlserver_auditing_enabled","Title":"Ensure that auditing is enabled on SQL servers","Resource":"sql-orders-prod-we","ResourceType":"Microsoft.Sql/servers","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Sql/servers/sql-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"SQL server sql-orders-prod-we has auditing disabled.","Recommendation":"Enable auditing to a Log Analytics workspace.","Reference":"","Frameworks":"CIS-3.0: 4.1.1"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"sqlserver_auditing_enabled","Title":"Ensure that auditing is enabled on SQL servers","Resource":"sql-webshop-dev-we","ResourceType":"Microsoft.Sql/servers","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Sql/servers/sql-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"SQL server sql-webshop-dev-we has auditing disabled.","Recommendation":"Enable auditing to a Log Analytics workspace.","Reference":"","Frameworks":"CIS-3.0: 4.1.1"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"defender_ensure_defender_for_containers_is_on","Title":"Ensure that Microsoft Defender for Containers is set to On","Resource":"Defender plan Containers","ResourceType":"Microsoft.Security/pricings","ResourceId":"","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Defender for Containers is on the Free tier in nwt-prod-001.","Recommendation":"Enable the Defender for Containers plan.","Reference":"","Frameworks":"CIS-3.0: 2.1"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"defender_ensure_defender_for_keyvaults_is_on","Title":"Ensure that Microsoft Defender for KeyVaults is set to On","Resource":"Defender plan KeyVaults","ResourceType":"Microsoft.Security/pricings","ResourceId":"","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Defender for KeyVaults is on the Free tier in nwt-prod-001.","Recommendation":"Enable the Defender for KeyVaults plan.","Reference":"","Frameworks":"CIS-3.0: 2.1"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"defender_ensure_defender_for_servers_is_on","Title":"Ensure that Microsoft Defender for Servers is set to On","Resource":"Defender plan Servers","ResourceType":"Microsoft.Security/pricings","ResourceId":"","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Defender for Servers is on the Free tier in nwt-prod-001.","Recommendation":"Enable the Defender for Servers plan.","Reference":"","Frameworks":"CIS-3.0: 2.1"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"defender_ensure_defender_for_storage_is_on","Title":"Ensure that Microsoft Defender for Storage is set to On","Resource":"Defender plan Storage","ResourceType":"Microsoft.Security/pricings","ResourceId":"","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Defender for Storage is on the Free tier in nwt-prod-001.","Recommendation":"Enable the Defender for Storage plan.","Reference":"","Frameworks":"CIS-3.0: 2.1"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"storage_ensure_minimum_tls_version_12","Title":"Ensure the minimum TLS version for storage accounts is set to 1.2","Resource":"stintegprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Storage/storageAccounts/stintegprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account stintegprodwe01 allows TLS 1.0.","Recommendation":"Set the minimum TLS version to TLS 1.2.","Reference":"https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version","Frameworks":"CIS-3.0: 3.15; ISO27001-2022: A.8.24"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"storage_ensure_minimum_tls_version_12","Title":"Ensure the minimum TLS version for storage accounts is set to 1.2","Resource":"storderprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Storage/storageAccounts/storderprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account storderprodwe01 allows TLS 1.0.","Recommendation":"Set the minimum TLS version to TLS 1.2.","Reference":"https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version","Frameworks":"CIS-3.0: 3.15; ISO27001-2022: A.8.24"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"storage_ensure_minimum_tls_version_12","Title":"Ensure the minimum TLS version for storage accounts is set to 1.2","Resource":"stsandboxdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Storage/storageAccounts/stsandboxdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Storage account stsandboxdevwe01 allows TLS 1.0.","Recommendation":"Set the minimum TLS version to TLS 1.2.","Reference":"https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version","Frameworks":"CIS-3.0: 3.15; ISO27001-2022: A.8.24"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"storage_ensure_minimum_tls_version_12","Title":"Ensure the minimum TLS version for storage accounts is set to 1.2","Resource":"stwebshopdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Storage/storageAccounts/stwebshopdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Storage account stwebshopdevwe01 allows TLS 1.0.","Recommendation":"Set the minimum TLS version to TLS 1.2.","Reference":"https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version","Frameworks":"CIS-3.0: 3.15; ISO27001-2022: A.8.24"},{"Source":"Prowler","Category":"Security","Severity":"High","CheckId":"storage_ensure_minimum_tls_version_12","Title":"Ensure the minimum TLS version for storage accounts is set to 1.2","Resource":"stwebshopprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Storage/storageAccounts/stwebshopprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account stwebshopprodwe01 allows TLS 1.0.","Recommendation":"Set the minimum TLS version to TLS 1.2.","Reference":"https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version","Frameworks":"CIS-3.0: 3.15; ISO27001-2022: A.8.24"},{"Source":"Native","Category":"Security","Severity":"High","CheckId":"NATIVE-SEC-003","Title":"Key Vault certificate expires within 30 days","Resource":"kv-webshop-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.KeyVault/vaults/kv-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Certificate \u0027wildcard-northwindtraders-example\u0027 expires in 12 days and has no auto-renewal policy.","Recommendation":"Renew the certificate or configure automatic renewal with an integrated CA.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Security","Severity":"High","CheckId":"NATIVE-SEC-004","Title":"Key Vault purge protection disabled","Resource":"kv-orders-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.KeyVault/vaults/kv-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"kv-orders-prod-we can be permanently deleted during the soft-delete retention period.","Recommendation":"Enable purge protection on the vault.","Reference":"https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview","Frameworks":""},{"Source":"Native","Category":"Security","Severity":"High","CheckId":"NATIVE-SEC-004","Title":"Key Vault purge protection disabled","Resource":"kv-webshop-dev-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.KeyVault/vaults/kv-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"kv-webshop-dev-we can be permanently deleted during the soft-delete retention period.","Recommendation":"Enable purge protection on the vault.","Reference":"https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview","Frameworks":""},{"Source":"Native","Category":"Security","Severity":"High","CheckId":"NATIVE-SEC-002","Title":"Owner role assigned directly to users","Resource":"nwt-prod-001","ResourceType":"Microsoft.Resources/subscriptions","ResourceId":"","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"4 users have the Owner role directly on the subscription (not through PIM or a group).","Recommendation":"Use Privileged Identity Management with eligible assignments, and assign roles to groups.","Reference":"https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-configure","Frameworks":""},{"Source":"PSRule","Category":"Security","Severity":"High","CheckId":"PSRULE::Azure.SQL.AAD","Title":"Use Entra ID authentication with SQL databases","Resource":"sql-orders-prod-we","ResourceType":"Microsoft.Sql/servers","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Sql/servers/sql-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use Entra ID authentication (Azure.SQL.AAD)","Recommendation":"Configure an Entra ID admin and disable SQL authentication where possible.","Reference":"","Frameworks":"WAF: Security / Identity and access management"},{"Source":"PSRule","Category":"Security","Severity":"High","CheckId":"PSRULE::Azure.SQL.AAD","Title":"Use Entra ID authentication with SQL databases","Resource":"sql-webshop-dev-we","ResourceType":"Microsoft.Sql/servers","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Sql/servers/sql-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Use Entra ID authentication (Azure.SQL.AAD)","Recommendation":"Configure an Entra ID admin and disable SQL authentication where possible.","Reference":"","Frameworks":"WAF: Security / Identity and access management"},{"Source":"Azure Advisor","Category":"Cost","Severity":"Medium","CheckId":"ADVISOR-rightsize-vm","Title":"Right-size or shut down underutilized virtual machines","Resource":"vm-jumpbox-dev-01","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Compute/virtualMachines/vm-jumpbox-dev-01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Average CPU below 3% over the last 7 days.","Recommendation":"Resize to a smaller SKU or configure auto-shutdown.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Cost","Severity":"Medium","CheckId":"NATIVE-COST-001","Title":"Unattached managed disk","Resource":"disk-temp-data-01","ResourceType":"Microsoft.Compute/disks","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Compute/disks/disk-temp-data-01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"disk-temp-data-01 (512 GB Premium SSD) is not attached to any VM.","Recommendation":"Delete the disk or snapshot it to cheaper storage.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Cost","Severity":"Medium","CheckId":"NATIVE-COST-001","Title":"Unattached managed disk","Resource":"disk-test-restore","ResourceType":"Microsoft.Compute/disks","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Compute/disks/disk-test-restore","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"disk-test-restore (256 GB Premium SSD) is not attached to any VM.","Recommendation":"Delete the disk or snapshot it to cheaper storage.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Cost","Severity":"Medium","CheckId":"NATIVE-COST-001","Title":"Unattached managed disk","Resource":"vm-erp-prod-03_OsDisk_1","ResourceType":"Microsoft.Compute/disks","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Compute/disks/vm-erp-prod-03_OsDisk_1","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"vm-erp-prod-03_OsDisk_1 (128 GB Premium SSD) is not attached to any VM.","Recommendation":"Delete the disk or snapshot it to cheaper storage.","Reference":"","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"Medium","CheckId":"MT.1020","Title":"All users should be blocked from using legacy authentication","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"No enabled policy blocks legacy authentication for all users.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"Medium","CheckId":"EIDSCA.AP01","Title":"Default Authorization Settings - Enabled self service password reset for admins","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"Self-service password reset is enabled for administrators.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user01@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user02@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user03@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user04@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user05@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user06@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user07@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user08@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user09@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user10@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user11@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user12@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user13@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"entra_non_privileged_user_has_mfa","Title":"Ensure that MFA is enabled for all non-privileged users","Resource":"user14@northwindtraders.example","ResourceType":"Microsoft Entra user","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"The user has no MFA method registered.","Recommendation":"Require MFA registration with Conditional Access.","Reference":"","Frameworks":"CIS-3.0: 1.1.2"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"app_register_with_identity","Title":"Ensure that Register with Entra ID is enabled on App Service","Resource":"app-webshop-api-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Web/sites/app-webshop-api-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"app-webshop-api-prod-we has no managed identity.","Recommendation":"Enable a system-assigned managed identity and use it instead of stored secrets.","Reference":"","Frameworks":"CIS-3.0: 9.5"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"app_register_with_identity","Title":"Ensure that Register with Entra ID is enabled on App Service","Resource":"app-webshop-dev-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Web/sites/app-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"app-webshop-dev-we has no managed identity.","Recommendation":"Enable a system-assigned managed identity and use it instead of stored secrets.","Reference":"","Frameworks":"CIS-3.0: 9.5"},{"Source":"Prowler","Category":"Identity","Severity":"Medium","CheckId":"app_register_with_identity","Title":"Ensure that Register with Entra ID is enabled on App Service","Resource":"func-orders-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Web/sites/func-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"func-orders-prod-we has no managed identity.","Recommendation":"Enable a system-assigned managed identity and use it instead of stored secrets.","Reference":"","Frameworks":"CIS-3.0: 9.5"},{"Source":"Maester","Category":"Identity","Severity":"Medium","CheckId":"MT.1030","Title":"Guest invitations should be restricted to admins","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"Any member user can invite guests.","Recommendation":"See the Maester documentation for this test.","Reference":"https://maester.dev/docs/tests/","Frameworks":""},{"Source":"AzGovViz","Category":"Identity","Severity":"Medium","CheckId":"AZGOVVIZ-RBAC-Unknown","Title":"Role assignment for a deleted identity","Resource":"Identity not found (4b1e...)","ResourceType":"Role assignment","ResourceId":"","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"A Contributor assignment points to an identity that no longer exists.","Recommendation":"Remove orphaned role assignments.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Infrastructure","Severity":"Medium","CheckId":"NATIVE-INFRA-002","Title":"VM has no backup configured","Resource":"vm-erp-prod-01","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Compute/virtualMachines/vm-erp-prod-01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"vm-erp-prod-01 is not protected by Azure Backup.","Recommendation":"Enable Azure Backup with a policy that matches the RPO.","Reference":"","Frameworks":""},{"Source":"PSRule","Category":"Operations","Severity":"Medium","CheckId":"PSRULE::Azure.KeyVault.Logs","Title":"Ensure audit diagnostics logs are enabled to audit Key Vault access","Resource":"kv-orders-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.KeyVault/vaults/kv-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Enable Key Vault audit logs (Azure.KeyVault.Logs)","Recommendation":"Configure a diagnostic setting that sends AuditEvent logs to Log Analytics.","Reference":"","Frameworks":"WAF: Security / Monitor"},{"Source":"PSRule","Category":"Operations","Severity":"Medium","CheckId":"PSRULE::Azure.KeyVault.Logs","Title":"Ensure audit diagnostics logs are enabled to audit Key Vault access","Resource":"kv-webshop-dev-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.KeyVault/vaults/kv-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Enable Key Vault audit logs (Azure.KeyVault.Logs)","Recommendation":"Configure a diagnostic setting that sends AuditEvent logs to Log Analytics.","Reference":"","Frameworks":"WAF: Security / Monitor"},{"Source":"PSRule","Category":"Operations","Severity":"Medium","CheckId":"PSRULE::Azure.KeyVault.Logs","Title":"Ensure audit diagnostics logs are enabled to audit Key Vault access","Resource":"kv-webshop-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.KeyVault/vaults/kv-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Enable Key Vault audit logs (Azure.KeyVault.Logs)","Recommendation":"Configure a diagnostic setting that sends AuditEvent logs to Log Analytics.","Reference":"","Frameworks":"WAF: Security / Monitor"},{"Source":"Prowler","Category":"Operations","Severity":"Medium","CheckId":"monitor_diagnostic_settings_exists","Title":"Ensure that a diagnostic setting exists for the subscription","Resource":"nwt-dev-001","ResourceType":"Microsoft.Resources/subscriptions","ResourceId":"","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"No subscription activity log diagnostic setting is configured.","Recommendation":"Send the activity log to a Log Analytics workspace.","Reference":"","Frameworks":"CIS-3.0: 5.1.1"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.AppService.AlwaysOn","Title":"Configure Always On for App Service apps","Resource":"app-webshop-dev-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Web/sites/app-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Use Always On (Azure.AppService.AlwaysOn)","Recommendation":"Enable Always On to avoid cold starts.","Reference":"","Frameworks":"WAF: Reliability / Design"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.AppService.AlwaysOn","Title":"Configure Always On for App Service apps","Resource":"app-webshop-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Web/sites/app-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use Always On (Azure.AppService.AlwaysOn)","Recommendation":"Enable Always On to avoid cold starts.","Reference":"","Frameworks":"WAF: Reliability / Design"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.AppService.AlwaysOn","Title":"Configure Always On for App Service apps","Resource":"func-erp-sync-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/sites/func-erp-sync-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use Always On (Azure.AppService.AlwaysOn)","Recommendation":"Enable Always On to avoid cold starts.","Reference":"","Frameworks":"WAF: Reliability / Design"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.AppService.AlwaysOn","Title":"Configure Always On for App Service apps","Resource":"func-orders-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Web/sites/func-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use Always On (Azure.AppService.AlwaysOn)","Recommendation":"Enable Always On to avoid cold starts.","Reference":"","Frameworks":"WAF: Reliability / Design"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.SoftDelete","Title":"Enable blob soft delete on Storage Accounts","Resource":"stintegprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Storage/storageAccounts/stintegprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Enable soft delete (Azure.Storage.SoftDelete)","Recommendation":"Enable blob soft delete with a retention of at least 7 days.","Reference":"https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.Storage.SoftDelete/","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.SoftDelete","Title":"Enable blob soft delete on Storage Accounts","Resource":"stlogsprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-logging-prod-we/providers/Microsoft.Storage/storageAccounts/stlogsprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Enable soft delete (Azure.Storage.SoftDelete)","Recommendation":"Enable blob soft delete with a retention of at least 7 days.","Reference":"https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.Storage.SoftDelete/","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.SoftDelete","Title":"Enable blob soft delete on Storage Accounts","Resource":"storderprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Storage/storageAccounts/storderprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Enable soft delete (Azure.Storage.SoftDelete)","Recommendation":"Enable blob soft delete with a retention of at least 7 days.","Reference":"https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.Storage.SoftDelete/","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.SoftDelete","Title":"Enable blob soft delete on Storage Accounts","Resource":"stsandboxdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Storage/storageAccounts/stsandboxdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Enable soft delete (Azure.Storage.SoftDelete)","Recommendation":"Enable blob soft delete with a retention of at least 7 days.","Reference":"https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.Storage.SoftDelete/","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.SoftDelete","Title":"Enable blob soft delete on Storage Accounts","Resource":"stwebshopdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Storage/storageAccounts/stwebshopdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Enable soft delete (Azure.Storage.SoftDelete)","Recommendation":"Enable blob soft delete with a retention of at least 7 days.","Reference":"https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.Storage.SoftDelete/","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.SoftDelete","Title":"Enable blob soft delete on Storage Accounts","Resource":"stwebshopprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Storage/storageAccounts/stwebshopprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Enable soft delete (Azure.Storage.SoftDelete)","Recommendation":"Enable blob soft delete with a retention of at least 7 days.","Reference":"https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.Storage.SoftDelete/","Frameworks":"WAF: Reliability / Data management"},{"Source":"WARA","Category":"Reliability","Severity":"Medium","CheckId":"WARA-74c2491d-048b-0041-a140-935960220e20","Title":"Enable zone redundancy for Azure SQL Database","Resource":"sql-orders-prod-we","ResourceType":"Microsoft.Sql/servers","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Sql/servers/sql-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Databases on sql-orders-prod-we are not zone redundant.","Recommendation":"Enable zone redundancy on the database or elastic pool.","Reference":"","Frameworks":""},{"Source":"WARA","Category":"Reliability","Severity":"Medium","CheckId":"WARA-RETIREMENT-basic-ip","Title":"Retirement: Basic SKU public IP addresses","Resource":"pip-erp-prod-01","ResourceType":"Microsoft.Network/publicIPAddresses","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Network/publicIPAddresses/pip-erp-prod-01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Basic SKU public IP addresses are retired.","Recommendation":"Upgrade to Standard SKU public IP addresses.","Reference":"","Frameworks":""},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.UseReplication","Title":"Storage accounts not using geo-replicated storage may be at risk","Resource":"stintegprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Storage/storageAccounts/stintegprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use geo-replicated storage (Azure.Storage.UseReplication)","Recommendation":"Use GRS, RA-GRS or GZRS for data that must survive a regional outage.","Reference":"","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.UseReplication","Title":"Storage accounts not using geo-replicated storage may be at risk","Resource":"stlogsprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-logging-prod-we/providers/Microsoft.Storage/storageAccounts/stlogsprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use geo-replicated storage (Azure.Storage.UseReplication)","Recommendation":"Use GRS, RA-GRS or GZRS for data that must survive a regional outage.","Reference":"","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.UseReplication","Title":"Storage accounts not using geo-replicated storage may be at risk","Resource":"stsandboxdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Storage/storageAccounts/stsandboxdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Use geo-replicated storage (Azure.Storage.UseReplication)","Recommendation":"Use GRS, RA-GRS or GZRS for data that must survive a regional outage.","Reference":"","Frameworks":"WAF: Reliability / Data management"},{"Source":"PSRule","Category":"Reliability","Severity":"Medium","CheckId":"PSRULE::Azure.Storage.UseReplication","Title":"Storage accounts not using geo-replicated storage may be at risk","Resource":"stwebshopprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Storage/storageAccounts/stwebshopprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use geo-replicated storage (Azure.Storage.UseReplication)","Recommendation":"Use GRS, RA-GRS or GZRS for data that must survive a regional outage.","Reference":"","Frameworks":"WAF: Reliability / Data management"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_default_network_access_rule_is_denied","Title":"Ensure default network access rule for storage accounts is set to deny","Resource":"stlogsprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-logging-prod-we/providers/Microsoft.Storage/storageAccounts/stlogsprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account stlogsprodwe01 allows access from all networks.","Recommendation":"Restrict network access with private endpoints or selected networks.","Reference":"","Frameworks":"CIS-3.0: 3.8; NIS2: 21.2.e"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_default_network_access_rule_is_denied","Title":"Ensure default network access rule for storage accounts is set to deny","Resource":"storderprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Storage/storageAccounts/storderprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account storderprodwe01 allows access from all networks.","Recommendation":"Restrict network access with private endpoints or selected networks.","Reference":"","Frameworks":"CIS-3.0: 3.8; NIS2: 21.2.e"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_default_network_access_rule_is_denied","Title":"Ensure default network access rule for storage accounts is set to deny","Resource":"stwebshopdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Storage/storageAccounts/stwebshopdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Storage account stwebshopdevwe01 allows access from all networks.","Recommendation":"Restrict network access with private endpoints or selected networks.","Reference":"","Frameworks":"CIS-3.0: 3.8; NIS2: 21.2.e"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_default_network_access_rule_is_denied","Title":"Ensure default network access rule for storage accounts is set to deny","Resource":"stwebshopprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Storage/storageAccounts/stwebshopprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account stwebshopprodwe01 allows access from all networks.","Recommendation":"Restrict network access with private endpoints or selected networks.","Reference":"","Frameworks":"CIS-3.0: 3.8; NIS2: 21.2.e"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"keyvault_private_endpoints","Title":"Ensure that private endpoints are used for Azure Key Vault","Resource":"kv-orders-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.KeyVault/vaults/kv-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Key Vault kv-orders-prod-we has no private endpoint.","Recommendation":"Add a private endpoint and disable public network access.","Reference":"","Frameworks":"CIS-3.0: 8.7"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"keyvault_private_endpoints","Title":"Ensure that private endpoints are used for Azure Key Vault","Resource":"kv-webshop-dev-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.KeyVault/vaults/kv-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Key Vault kv-webshop-dev-we has no private endpoint.","Recommendation":"Add a private endpoint and disable public network access.","Reference":"","Frameworks":"CIS-3.0: 8.7"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"keyvault_private_endpoints","Title":"Ensure that private endpoints are used for Azure Key Vault","Resource":"kv-webshop-prod-we","ResourceType":"Microsoft.KeyVault/vaults","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.KeyVault/vaults/kv-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Key Vault kv-webshop-prod-we has no private endpoint.","Recommendation":"Add a private endpoint and disable public network access.","Reference":"","Frameworks":"CIS-3.0: 8.7"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_blob_public_access_level_is_disabled","Title":"Ensure that public blob access is disabled","Resource":"stintegprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Storage/storageAccounts/stintegprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account stintegprodwe01 allows anonymous blob access.","Recommendation":"Disable \u0027Allow blob anonymous access\u0027.","Reference":"","Frameworks":"CIS-3.0: 3.7"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_blob_public_access_level_is_disabled","Title":"Ensure that public blob access is disabled","Resource":"storderprodwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Storage/storageAccounts/storderprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Storage account storderprodwe01 allows anonymous blob access.","Recommendation":"Disable \u0027Allow blob anonymous access\u0027.","Reference":"","Frameworks":"CIS-3.0: 3.7"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"storage_blob_public_access_level_is_disabled","Title":"Ensure that public blob access is disabled","Resource":"stsandboxdevwe01","ResourceType":"Microsoft.Storage/storageAccounts","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Storage/storageAccounts/stsandboxdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Storage account stsandboxdevwe01 allows anonymous blob access.","Recommendation":"Disable \u0027Allow blob anonymous access\u0027.","Reference":"","Frameworks":"CIS-3.0: 3.7"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"app_minimum_tls_version_12","Title":"Ensure web app is using the latest version of TLS encryption","Resource":"app-webshop-dev-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Web/sites/app-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"app-webshop-dev-we accepts TLS 1.0.","Recommendation":"Set the minimum inbound TLS version to 1.2.","Reference":"","Frameworks":"CIS-3.0: 9.3"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"app_minimum_tls_version_12","Title":"Ensure web app is using the latest version of TLS encryption","Resource":"app-webshop-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Web/sites/app-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"app-webshop-prod-we accepts TLS 1.0.","Recommendation":"Set the minimum inbound TLS version to 1.2.","Reference":"","Frameworks":"CIS-3.0: 9.3"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"app_minimum_tls_version_12","Title":"Ensure web app is using the latest version of TLS encryption","Resource":"func-erp-sync-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/sites/func-erp-sync-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"func-erp-sync-prod-we accepts TLS 1.0.","Recommendation":"Set the minimum inbound TLS version to 1.2.","Reference":"","Frameworks":"CIS-3.0: 9.3"},{"Source":"Prowler","Category":"Security","Severity":"Medium","CheckId":"app_minimum_tls_version_12","Title":"Ensure web app is using the latest version of TLS encryption","Resource":"func-orders-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Web/sites/func-orders-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"func-orders-prod-we accepts TLS 1.0.","Recommendation":"Set the minimum inbound TLS version to 1.2.","Reference":"","Frameworks":"CIS-3.0: 9.3"},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"app-webshop-api-prod-we","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Resources/resources/app-webshop-api-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: CostCenter.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"app-webshop-prod-we","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Resources/resources/app-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: CostCenter.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"func-erp-sync-prod-we","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Resources/resources/func-erp-sync-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: Owner, Environment.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"stintegprodwe01","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Resources/resources/stintegprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: CostCenter, Owner.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"storderprodwe01","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-orders-prod-we/providers/Microsoft.Resources/resources/storderprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: Owner, CostCenter.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"stwebshopdevwe01","ResourceType":"","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Resources/resources/stwebshopdevwe01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Missing tags: Owner, CostCenter.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"stwebshopprodwe01","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Resources/resources/stwebshopprodwe01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: Owner.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Compliance","Severity":"Low","CheckId":"NATIVE-COMP-001","Title":"Required tags missing","Resource":"vm-erp-prod-02","ResourceType":"","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Resources/resources/vm-erp-prod-02","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Missing tags: Environment, Owner.","Recommendation":"Add the required tags, and enforce them with Azure Policy.","Reference":"","Frameworks":""},{"Source":"AzGovViz","Category":"Cost","Severity":"Low","CheckId":"AZGOVVIZ-ORPHANED-connections","Title":"Orphaned resource: API connections","Resource":"office365-1","ResourceType":"microsoft.web/connections","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/connections/office365-1","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The API connection is not used by any Logic App.","Recommendation":"Delete unused API connections.","Reference":"","Frameworks":""},{"Source":"AzGovViz","Category":"Cost","Severity":"Low","CheckId":"AZGOVVIZ-ORPHANED-connections","Title":"Orphaned resource: API connections","Resource":"office365-2","ResourceType":"microsoft.web/connections","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/connections/office365-2","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The API connection is not used by any Logic App.","Recommendation":"Delete unused API connections.","Reference":"","Frameworks":""},{"Source":"AzGovViz","Category":"Cost","Severity":"Low","CheckId":"AZGOVVIZ-ORPHANED-connections","Title":"Orphaned resource: API connections","Resource":"office365-3","ResourceType":"microsoft.web/connections","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/connections/office365-3","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The API connection is not used by any Logic App.","Recommendation":"Delete unused API connections.","Reference":"","Frameworks":""},{"Source":"AzGovViz","Category":"Cost","Severity":"Low","CheckId":"AZGOVVIZ-ORPHANED-connections","Title":"Orphaned resource: API connections","Resource":"office365-4","ResourceType":"microsoft.web/connections","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/connections/office365-4","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The API connection is not used by any Logic App.","Recommendation":"Delete unused API connections.","Reference":"","Frameworks":""},{"Source":"AzGovViz","Category":"Cost","Severity":"Low","CheckId":"AZGOVVIZ-ORPHANED-connections","Title":"Orphaned resource: API connections","Resource":"office365-5","ResourceType":"microsoft.web/connections","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/connections/office365-5","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The API connection is not used by any Logic App.","Recommendation":"Delete unused API connections.","Reference":"","Frameworks":""},{"Source":"AzGovViz","Category":"Cost","Severity":"Low","CheckId":"AZGOVVIZ-ORPHANED-connections","Title":"Orphaned resource: API connections","Resource":"office365-6","ResourceType":"microsoft.web/connections","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/connections/office365-6","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"The API connection is not used by any Logic App.","Recommendation":"Delete unused API connections.","Reference":"","Frameworks":""},{"Source":"Native","Category":"Cost","Severity":"Low","CheckId":"NATIVE-COST-002","Title":"Unassociated public IP address","Resource":"pip-old-lb-dev","ResourceType":"Microsoft.Network/publicIPAddresses","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Network/publicIPAddresses/pip-old-lb-dev","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"pip-old-lb-dev is not associated with any resource and is still billed.","Recommendation":"Delete the public IP if it is no longer needed.","Reference":"","Frameworks":""},{"Source":"PSRule","Category":"Operations","Severity":"Low","CheckId":"PSRULE::Azure.AppService.NETVersion","Title":"Use a newer runtime stack version","Resource":"app-webshop-dev-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-webshop-dev-we/providers/Microsoft.Web/sites/app-webshop-dev-we","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Use supported runtime versions (Azure.AppService.NETVersion)","Recommendation":"Upgrade to a supported .NET version.","Reference":"","Frameworks":"WAF: Operational Excellence / Maintenance"},{"Source":"PSRule","Category":"Operations","Severity":"Low","CheckId":"PSRULE::Azure.AppService.NETVersion","Title":"Use a newer runtime stack version","Resource":"app-webshop-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-webshop-prod-we/providers/Microsoft.Web/sites/app-webshop-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use supported runtime versions (Azure.AppService.NETVersion)","Recommendation":"Upgrade to a supported .NET version.","Reference":"","Frameworks":"WAF: Operational Excellence / Maintenance"},{"Source":"PSRule","Category":"Operations","Severity":"Low","CheckId":"PSRULE::Azure.AppService.NETVersion","Title":"Use a newer runtime stack version","Resource":"func-erp-sync-prod-we","ResourceType":"Microsoft.Web/sites","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-integration-prod-we/providers/Microsoft.Web/sites/func-erp-sync-prod-we","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use supported runtime versions (Azure.AppService.NETVersion)","Recommendation":"Upgrade to a supported .NET version.","Reference":"","Frameworks":"WAF: Operational Excellence / Maintenance"},{"Source":"PSRule","Category":"Performance","Severity":"Low","CheckId":"PSRULE::Azure.VM.AcceleratedNetworking","Title":"Use accelerated networking for supported operating systems and VM types","Resource":"vm-erp-prod-01","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Compute/virtualMachines/vm-erp-prod-01","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use accelerated networking (Azure.VM.AcceleratedNetworking)","Recommendation":"Enable accelerated networking on the network interfaces.","Reference":"","Frameworks":"WAF: Performance Efficiency / Design"},{"Source":"PSRule","Category":"Performance","Severity":"Low","CheckId":"PSRULE::Azure.VM.AcceleratedNetworking","Title":"Use accelerated networking for supported operating systems and VM types","Resource":"vm-erp-prod-02","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38/resourceGroups/rg-legacy-prod-we/providers/Microsoft.Compute/virtualMachines/vm-erp-prod-02","SubscriptionId":"3c9e7a52-1d4f-4b8a-a6e0-5f2b9c7d1e38","SubscriptionName":"nwt-prod-001","Finding":"Use accelerated networking (Azure.VM.AcceleratedNetworking)","Recommendation":"Enable accelerated networking on the network interfaces.","Reference":"","Frameworks":"WAF: Performance Efficiency / Design"},{"Source":"PSRule","Category":"Performance","Severity":"Low","CheckId":"PSRULE::Azure.VM.AcceleratedNetworking","Title":"Use accelerated networking for supported operating systems and VM types","Resource":"vm-jumpbox-dev-01","ResourceType":"Microsoft.Compute/virtualMachines","ResourceId":"/subscriptions/b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62/resourceGroups/rg-sandbox-dev-we/providers/Microsoft.Compute/virtualMachines/vm-jumpbox-dev-01","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Use accelerated networking (Azure.VM.AcceleratedNetworking)","Recommendation":"Enable accelerated networking on the network interfaces.","Reference":"","Frameworks":"WAF: Performance Efficiency / Design"},{"Source":"AzGovViz","Category":"Security","Severity":"Low","CheckId":"AZGOVVIZ-MDFC-Free","Title":"Defender for Cloud plan on Free tier","Resource":"nwt-dev-001 / AppServices","ResourceType":"Microsoft.Security/pricings","ResourceId":"","SubscriptionId":"b71f2e94-6a3c-4d15-8e27-9c4a0b5d3f62","SubscriptionName":"nwt-dev-001","Finding":"Defender for App Service is not enabled.","Recommendation":"Evaluate enabling the plan for internet-facing apps.","Reference":"","Frameworks":""},{"Source":"Maester","Category":"Identity","Severity":"Info","CheckId":"MT.1033","Title":"Named locations should be reviewed","Resource":"Tenant: Northwind Traders (demo)","ResourceType":"Microsoft Entra tenant","ResourceId":"","SubscriptionId":"-","SubscriptionName":"Tenant","Finding":"Needs manual investigation. 3 trusted named locations were found.","Recommendation":"Review that the trusted IP ranges are still correct.","Reference":"","Frameworks":""}]}</script>
+
+<header class="masthead">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow" id="eyebrow">Azure environment assessment</p>
+      <h1 id="report-title"></h1>
+      <p class="meta" id="report-meta"></p>
+    </div>
+    <div class="head-actions">
+      <button class="btn" id="btn-theme" type="button" title="Toggle light/dark">Theme</button>
+      <button class="btn" id="btn-print" type="button">Print / PDF</button>
+      <button class="btn primary" id="btn-csv" type="button">Export CSV</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Report sections">
+  <div class="wrap" role="tablist">
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" data-tab="findings" aria-selected="false">Findings<span class="count" id="tab-count-findings"></span></button>
+    <button class="tab" role="tab" data-tab="resources" aria-selected="false">Resources<span class="count" id="tab-count-resources"></span></button>
+    <button class="tab" role="tab" data-tab="tools" aria-selected="false">Tools &amp; method</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- ─────────────── OVERVIEW ─────────────── -->
+  <section id="tab-overview" aria-label="Overview">
+    <div class="summary">
+      <div class="card card-pad hero">
+        <p class="label">Issues that need action</p>
+        <p class="value" id="hero-value">0</p>
+        <p class="note" id="hero-note"></p>
+        <p class="verdict" id="hero-verdict"></p>
+      </div>
+      <div>
+        <div class="tiles" id="sev-tiles"></div>
+        <div class="facts" id="facts"></div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card card-pad">
+        <div class="card-head">
+          <div>
+            <h2>Where the risk is</h2>
+            <p class="sub">Open issues per area, split by severity. Select an area to see its findings.</p>
+          </div>
+          <div class="seg-toggle" role="group" aria-label="Count">
+            <button type="button" data-measure="issues" aria-pressed="true">Issues</button>
+            <button type="button" data-measure="findings" aria-pressed="false">Findings</button>
+          </div>
+        </div>
+        <div class="legend" id="sev-legend"></div>
+        <div class="bars" id="category-bars"></div>
+      </div>
+      <div class="card card-pad">
+        <div class="card-head">
+          <div>
+            <h2>Assessment coverage</h2>
+            <p class="sub">Tools that contributed to this report. Pass rate is shown where the tool reports passed checks.</p>
+          </div>
+        </div>
+        <div class="tool-list" id="tool-summary"></div>
+      </div>
+    </div>
+
+    <div class="card card-pad" id="sub-card" hidden style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <h2>By subscription</h2>
+          <p class="sub">Issues and findings per subscription. Tenant-level checks (Entra ID) are listed separately. Select a row to filter the findings.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="sub-head"></thead>
+          <tbody id="sub-rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="card-head">
+        <div>
+          <h2>Top priorities</h2>
+          <p class="sub">The most severe issues, ordered by severity and number of affected resources.</p>
+        </div>
+        <button class="btn no-print" type="button" id="btn-all-findings">All findings →</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:110px">Severity</th><th>Issue</th><th>Area</th><th>Source</th><th class="num">Resources</th></tr></thead>
+          <tbody id="top-issues"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── FINDINGS ─────────────── -->
+  <section id="tab-findings" aria-label="Findings" hidden>
+    <div class="filters">
+      <input type="search" id="f-search" placeholder="Search issue, resource, recommendation…" aria-label="Search findings">
+      <div class="sev-filter" id="f-sev" role="group" aria-label="Severity"></div>
+      <select id="f-cat" aria-label="Area"></select>
+      <select id="f-src" aria-label="Source"></select>
+      <select id="f-sub" aria-label="Subscription" hidden></select>
+      <div class="seg-toggle" role="group" aria-label="View">
+        <button type="button" data-view="grouped" aria-pressed="true">By issue</button>
+        <button type="button" data-view="flat" aria-pressed="false">All rows</button>
+      </div>
+      <button class="btn" type="button" id="f-reset">Reset</button>
+    </div>
+    <div class="result-line"><span id="f-result"></span></div>
+    <div id="findings-view"></div>
+  </section>
+
+  <!-- ─────────────── RESOURCES ─────────────── -->
+  <section id="tab-resources" aria-label="Resources" hidden>
+    <div class="filters">
+      <input type="search" id="r-search" placeholder="Search resource name, type or ID…" aria-label="Search resources">
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Resource</th><th>Type</th><th style="width:220px">Findings by severity</th><th class="num">Findings</th><th>Sources</th></tr></thead>
+          <tbody id="resource-rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="more" id="r-more"></div>
+  </section>
+
+  <!-- ─────────────── TOOLS & METHOD ─────────────── -->
+  <section id="tab-tools" aria-label="Tools and method" hidden>
+    <div class="card card-pad" style="margin-bottom:16px">
+      <div class="card-head"><div><h2>Tool runs</h2><p class="sub">Status, scope and raw output from every tool. Raw reports open relative to this file.</p></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tool</th><th>Status</th><th>Version</th><th>Scope</th><th class="num">Duration</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Findings</th><th>Raw output</th></tr></thead>
+          <tbody id="tool-rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card card-pad prose">
+      <h2>How to read this report</h2>
+      <h3>Findings and issues</h3>
+      <p>A <strong>finding</strong> is one failed check on one resource. An <strong>issue</strong> groups every finding from the same check, so a missing tag on 300 resources is one issue with 300 findings. Prioritise by issue; use findings to plan the work.</p>
+      <h3>Severity</h3>
+      <p><strong>Critical</strong> – directly exploitable or imminent outage risk, act now. <strong>High</strong> – significant risk, fix within weeks. <strong>Medium</strong> – best-practice gap to plan into regular work. <strong>Low</strong> – hygiene and optimisation. <strong>Info</strong> – informational or needs manual investigation.</p>
+      <p>Severities are normalised from each tool: Prowler, Maester and the built-in checks keep their own levels; Azure Advisor and WARA impact High/Medium/Low map directly; PSRule Critical/Important/Awareness map to High/Medium/Low.</p>
+      <h3>Areas</h3>
+      <p>Findings are grouped into Security, Identity, Governance, Reliability, Cost, Operations, Performance, Infrastructure and Compliance. Advisor and PSRule findings follow their Well-Architected pillar.</p>
+      <h3>Overlap between tools</h3>
+      <p>Several tools can report the same underlying problem (for example blob soft delete from both the built-in checks and Azure Advisor). Findings are kept per tool so nothing is lost; the Resources tab shows which sources flagged each resource.</p>
+      <h3>Limitations</h3>
+      <p>All tools run read-only with the permissions of the signed-in account. Checks that could not run because of missing permissions do not show up as findings, so a low count is not proof of compliance. Evaluate each recommendation against the organisation's requirements before changing anything.</p>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Data ────────────────────────────────────────────────
+  var DATA = JSON.parse(document.getElementById("audit-data").textContent);
+  var META = DATA.meta || {};
+  var FINDINGS = (DATA.findings || []).map(function (f, i) {
+    return {
+      i: i,
+      source: f.Source || "Native", category: f.Category || "Other", severity: f.Severity || "Info",
+      checkId: f.CheckId || "", title: f.Title || f.Finding || "", resource: f.Resource || "",
+      resourceType: f.ResourceType || "", resourceId: f.ResourceId || "", subscriptionId: f.SubscriptionId || "", subscriptionName: f.SubscriptionName || "",
+      finding: f.Finding || "", recommendation: f.Recommendation || "", reference: f.Reference || "",
+      frameworks: f.Frameworks || ""
+    };
+  });
+  var TOOLS = DATA.tools || [];
+  var SUBSCRIPTIONS = META.subscriptions || [];
+  var MULTI_SUB = SUBSCRIPTIONS.length > 1;
+
+  var SEVERITIES = ["Critical", "High", "Medium", "Low", "Info"];
+  var SEV_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
+  var SEV_WEIGHT = { Critical: 40, High: 15, Medium: 5, Low: 1, Info: 0 };
+  var SOURCE_LABEL = { "Native": "Built-in checks" };
+
+  function sourceLabel(s) { return SOURCE_LABEL[s] || s; }
+  function sevIndex(s) { return SEV_RANK.hasOwnProperty(s) ? SEV_RANK[s] : 4; }
+
+  // ── DOM helpers (all data goes in via textContent) ─────
+  function el(tag, attrs, children) {
+    var n = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        var v = attrs[k];
+        if (v === null || v === undefined || v === false) return;
+        if (k === "class") n.className = v;
+        else if (k === "text") n.textContent = v;
+        else if (k === "style") n.setAttribute("style", v);
+        else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), v);
+        else n.setAttribute(k, v === true ? "" : v);
+      });
+    }
+    (children || []).forEach(function (c) {
+      if (c === null || c === undefined || c === false) return;
+      n.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+    });
+    return n;
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+  function fmt(n) { return Number(n).toLocaleString("en-US"); }
+  function plural(n, one, many) { return fmt(n) + " " + (n === 1 ? one : (many || one + "s")); }
+  function safeUrl(u) { return /^https?:\/\//i.test(u) ? u : null; }
+  function sevPill(sev) { return el("span", { class: "sev" }, [el("span", { class: "swatch sw-" + sev, "aria-hidden": "true" }), sev]); }
+
+  // ── Grouping ────────────────────────────────────────────
+  function resourceKey(f) { return (f.resourceId || f.resource || "(tenant)").toLowerCase(); }
+
+  function groupIssues(list) {
+    var map = {}, order = [];
+    list.forEach(function (f) {
+      var key = f.source + "::" + (f.checkId || f.title);
+      var g = map[key];
+      if (!g) {
+        g = map[key] = { key: key, title: f.title, source: f.source, category: f.category, severity: f.severity,
+          recommendation: f.recommendation, reference: f.reference, frameworks: f.frameworks, checkId: f.checkId,
+          items: [], resources: {} };
+        order.push(g);
+      }
+      if (sevIndex(f.severity) < sevIndex(g.severity)) g.severity = f.severity;
+      if (!g.reference && f.reference) g.reference = f.reference;
+      g.items.push(f);
+      g.resources[resourceKey(f)] = true;
+    });
+    order.forEach(function (g) { g.resourceCount = Object.keys(g.resources).length; });
+    order.sort(function (a, b) {
+      return sevIndex(a.severity) - sevIndex(b.severity) || b.resourceCount - a.resourceCount || a.title.localeCompare(b.title);
+    });
+    return order;
+  }
+
+  var ALL_ISSUES = groupIssues(FINDINGS);
+
+  // ── Tooltip ─────────────────────────────────────────────
+  var tip = document.getElementById("tooltip");
+  function showTip(evt, value, label, color) {
+    clear(tip);
+    tip.appendChild(el("strong", { text: value }));
+    tip.appendChild(el("span", {}, [el("span", { class: "tt-key", style: "background:" + color }), label]));
+    tip.hidden = false;
+    moveTip(evt);
+  }
+  function moveTip(evt) {
+    var x, y;
+    if (evt.clientX !== undefined && evt.type.indexOf("focus") === -1) { x = evt.clientX; y = evt.clientY; }
+    else { var r = evt.target.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top; }
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, x + 12)) + "px";
+    tip.style.top = Math.max(8, y - h - 12) + "px";
+  }
+  function hideTip() { tip.hidden = true; }
+
+  // ── Header ──────────────────────────────────────────────
+  function renderHeader() {
+    document.getElementById("report-title").textContent = META.customerName || META.subscriptionName || "Azure environment";
+    if (META.preparedBy) document.getElementById("eyebrow").textContent = "Azure environment assessment · " + META.preparedBy;
+    var meta = document.getElementById("report-meta");
+    (MULTI_SUB ? [
+      ["Subscriptions", SUBSCRIPTIONS.length <= 4 ? SUBSCRIPTIONS.map(function (s) { return s.name; }).join(", ") : SUBSCRIPTIONS.length + " (see By subscription)"]
+    ] : [
+      ["Subscription", META.subscriptionName],
+      ["Subscription ID", META.subscriptionId, true]
+    ]).concat([
+      ["Tenant", META.tenantName || META.tenantId, !META.tenantName],
+      ["Generated", META.generated]
+    ]).forEach(function (m) {
+      if (!m[1]) return;
+      meta.appendChild(el("span", {}, [m[0] + ": ", m[2] ? el("code", { text: m[1] }) : m[1]]));
+    });
+    document.getElementById("footer").textContent =
+      "Generated by Invoke-AzureAudit" + (META.scriptVersion ? " " + META.scriptVersion : "") + " · " + (META.generated || "") +
+      " · " + plural(FINDINGS.length, "finding") + " from " + plural(TOOLS.filter(toolHasData).length, "tool") +
+      ". Read-only assessment; validate recommendations before making changes.";
+    document.getElementById("tab-count-findings").textContent = fmt(FINDINGS.length);
+  }
+
+  function toolHasData(t) { return ["Succeeded", "PartiallySucceeded", "Imported"].indexOf(t.Status) !== -1; }
+
+  // ── Overview ────────────────────────────────────────────
+  function renderOverview() {
+    var actionable = ALL_ISSUES.filter(function (g) { return g.severity === "Critical" || g.severity === "High"; });
+    var critical = ALL_ISSUES.filter(function (g) { return g.severity === "Critical"; }).length;
+    document.getElementById("hero-value").textContent = fmt(actionable.length);
+    document.getElementById("hero-note").textContent =
+      "Critical and high severity issues, out of " + plural(ALL_ISSUES.length, "issue") + " in total.";
+    var verdict;
+    if (critical > 0) verdict = plural(critical, "critical issue") + " should be handled immediately. Start with Top priorities below.";
+    else if (actionable.length > 0) verdict = "No critical issues. Plan the high severity issues into the next few weeks.";
+    else if (ALL_ISSUES.length > 0) verdict = "No critical or high severity issues. Remaining items are improvements and hygiene.";
+    else verdict = "No failed checks were reported by the tools that ran.";
+    document.getElementById("hero-verdict").textContent = verdict;
+
+    var tiles = clear(document.getElementById("sev-tiles"));
+    SEVERITIES.forEach(function (sev) {
+      var issues = ALL_ISSUES.filter(function (g) { return g.severity === sev; }).length;
+      var findings = FINDINGS.filter(function (f) { return f.severity === sev; }).length;
+      tiles.appendChild(el("button", { class: "tile", type: "button", onclick: function () { openFindings({ sev: [sev] }); } }, [
+        el("div", { class: "t-label" }, [el("span", { class: "swatch sw-" + sev, "aria-hidden": "true" }), sev]),
+        el("div", { class: "t-value", text: fmt(issues) }),
+        el("div", { class: "t-sub", text: (issues === 1 ? "issue" : "issues") + " · " + plural(findings, "finding") })
+      ]));
+    });
+
+    var resourceCount = Object.keys(FINDINGS.reduce(function (m, f) { m[resourceKey(f)] = 1; return m; }, {})).length;
+    var toolsWithData = TOOLS.filter(toolHasData).length;
+    var facts = clear(document.getElementById("facts"));
+    [
+      ["Affected resources", fmt(resourceCount)],
+      ["Findings", fmt(FINDINGS.length)],
+      ["Tools with results", toolsWithData + " of " + TOOLS.length]
+    ].forEach(function (f) {
+      facts.appendChild(el("div", { class: "card fact" }, [el("div", { class: "t-label", text: f[0] }), el("div", { class: "t-value", text: f[1] })]));
+    });
+
+    var legend = clear(document.getElementById("sev-legend"));
+    SEVERITIES.forEach(function (s) { legend.appendChild(el("span", {}, [el("span", { class: "swatch sw-" + s }), s])); });
+
+    renderCategoryBars("issues");
+    renderToolSummary();
+    renderSubscriptionTable();
+    renderTopIssues();
+  }
+
+  function renderSubscriptionTable() {
+    if (!MULTI_SUB) return;
+    document.getElementById("sub-card").hidden = false;
+    var head = clear(document.getElementById("sub-head"));
+    var hr = el("tr", {}, [el("th", { text: "Subscription" })]);
+    SEVERITIES.forEach(function (s) { hr.appendChild(el("th", { class: "num" }, [el("span", { class: "sev" }, [el("span", { class: "swatch sw-" + s }), s])])); });
+    hr.appendChild(el("th", { class: "num", text: "Issues" }));
+    hr.appendChild(el("th", { class: "num", text: "Findings" }));
+    head.appendChild(hr);
+
+    var order = SUBSCRIPTIONS.map(function (s) { return s.name; });
+    var names = Object.keys(FINDINGS.reduce(function (m, f) { m[f.subscriptionName || "Tenant"] = 1; return m; }, {}));
+    names.forEach(function (n) { if (order.indexOf(n) === -1) order.push(n); });
+
+    var body = clear(document.getElementById("sub-rows"));
+    order.forEach(function (name) {
+      var rows = FINDINGS.filter(function (f) { return (f.subscriptionName || "Tenant") === name; });
+      var issues = groupIssues(rows);
+      var tr = el("tr", { class: "clickable", tabindex: "0",
+        onclick: function () { openFindings({ sub: name }); },
+        onkeydown: function (e) { if (e.key === "Enter") openFindings({ sub: name }); } }, [el("td", { style: "font-weight:600", text: name })]);
+      SEVERITIES.forEach(function (s) {
+        var n = issues.filter(function (g) { return g.severity === s; }).length;
+        tr.appendChild(el("td", { class: "num" + (n ? "" : " muted"), text: n ? fmt(n) : "–" }));
+      });
+      tr.appendChild(el("td", { class: "num", text: fmt(issues.length) }));
+      tr.appendChild(el("td", { class: "num", text: fmt(rows.length) }));
+      body.appendChild(tr);
+    });
+  }
+
+  function renderCategoryBars(measure) {
+    var cats = {};
+    var source = measure === "issues" ? ALL_ISSUES : FINDINGS;
+    source.forEach(function (x) {
+      var c = cats[x.category] || (cats[x.category] = { name: x.category, total: 0, score: 0, bySev: {} });
+      c.total++; c.score += SEV_WEIGHT[x.severity] || 0;
+      c.bySev[x.severity] = (c.bySev[x.severity] || 0) + 1;
+    });
+    var rows = Object.keys(cats).map(function (k) { return cats[k]; })
+      .sort(function (a, b) { return b.score - a.score || b.total - a.total; });
+    var max = rows.reduce(function (m, r) { return Math.max(m, r.total); }, 0) || 1;
+    var box = clear(document.getElementById("category-bars"));
+    if (!rows.length) { box.appendChild(el("p", { class: "muted", text: "No findings." })); return; }
+    var unit = measure === "issues" ? "issue" : "finding";
+    rows.forEach(function (r) {
+      var stack = el("div", { class: "bar-stack", style: "width:calc((100% - 70px) * " + (r.total / max).toFixed(4) + ")" });
+      SEVERITIES.forEach(function (sev) {
+        var n = r.bySev[sev] || 0;
+        if (!n) return;
+        var seg = el("div", {
+          class: "bar-seg sw-" + sev, tabindex: "0", role: "img",
+          "aria-label": r.name + ": " + plural(n, sev.toLowerCase() + " " + unit),
+          style: "flex:" + n + " 1 0",
+          onpointermove: function (e) { showTip(e, plural(n, unit), sev + " · " + r.name, "var(--sev-" + sev.toLowerCase() + ")"); },
+          onpointerleave: hideTip, onfocus: function (e) { showTip(e, plural(n, unit), sev + " · " + r.name, "var(--sev-" + sev.toLowerCase() + ")"); },
+          onblur: hideTip,
+          onclick: function () { hideTip(); openFindings({ cat: r.name, sev: [sev] }); }
+        });
+        stack.appendChild(seg);
+      });
+      box.appendChild(el("button", { class: "bar-label", type: "button", onclick: function () { openFindings({ cat: r.name }); } }, [r.name]));
+      box.appendChild(el("div", { class: "bar-track" }, [stack, el("span", { class: "bar-value", text: fmt(r.total) })]));
+    });
+  }
+
+  function statusInfo(status) {
+    switch (status) {
+      case "Succeeded": return { cls: "st-ok", text: "Completed" };
+      case "Imported": return { cls: "st-ok", text: "Imported" };
+      case "PartiallySucceeded": return { cls: "st-warn", text: "Partial" };
+      case "Skipped": return { cls: "st-off", text: "Skipped" };
+      case "NotInstalled": return { cls: "st-off", text: "Not installed" };
+      default: return { cls: "st-bad", text: "Failed" };
+    }
+  }
+  function statusEl(status, title) {
+    var s = statusInfo(status);
+    return el("span", { class: "status " + s.cls, title: title || null }, [el("i", { "aria-hidden": "true" }), s.text]);
+  }
+
+  function renderToolSummary() {
+    var box = clear(document.getElementById("tool-summary"));
+    if (!TOOLS.length) { box.appendChild(el("p", { class: "muted", text: "No tool information recorded." })); return; }
+    TOOLS.forEach(function (t) {
+      var meterCell;
+      if (t.Total > 0 && t.Passed >= 0) {
+        var pct = Math.round(100 * t.Passed / t.Total);
+        meterCell = el("div", {}, [
+          el("div", { class: "meter", role: "img", "aria-label": pct + "% of checks passed" }, [el("div", { style: "width:" + pct + "%" })]),
+          el("div", { class: "meter-label", text: pct + "% passed · " + fmt(t.Passed) + " / " + fmt(t.Total) })
+        ]);
+      } else {
+        meterCell = el("div", { class: "meter-label muted", text: t.Message && !toolHasData(t) ? t.Message : "Pass rate not reported" });
+        meterCell.classList.add("clamp");
+      }
+      box.appendChild(el("div", { class: "tool" }, [
+        el("div", {}, [el("div", { class: "tool-name", text: t.Tool === "Native" ? "Built-in checks" : t.Tool }), el("div", { class: "tool-desc clamp", text: t.Description || "" })]),
+        statusEl(t.Status, t.Message),
+        meterCell,
+        el("div", { class: "issue-count" }, [el("strong", { text: fmt(t.FindingCount || 0) }), el("div", { class: "muted", text: "findings" })])
+      ]));
+    });
+  }
+
+  function renderTopIssues() {
+    var body = clear(document.getElementById("top-issues"));
+    var top = ALL_ISSUES.filter(function (g) { return g.severity !== "Info"; }).slice(0, 10);
+    if (!top.length) { body.appendChild(el("tr", {}, [el("td", { colspan: "5", class: "muted", text: "No issues to prioritise." })])); return; }
+    top.forEach(function (g) {
+      body.appendChild(el("tr", { class: "clickable", tabindex: "0",
+        onclick: function () { openFindings({ issue: g.key }); },
+        onkeydown: function (e) { if (e.key === "Enter") openFindings({ issue: g.key }); } }, [
+        el("td", {}, [sevPill(g.severity)]),
+        el("td", {}, [el("div", { class: "clamp", text: g.title })]),
+        el("td", { text: g.category }),
+        el("td", { text: sourceLabel(g.source) }),
+        el("td", { class: "num", text: fmt(g.resourceCount) })
+      ]));
+    });
+  }
+
+  // ── Findings tab ────────────────────────────────────────
+  var state = { q: "", sev: [], cat: "", src: "", sub: "", view: "grouped", limit: 60, openIssue: null };
+
+  function uniqueSorted(key) {
+    var m = {};
+    FINDINGS.forEach(function (f) { m[f[key]] = (m[f[key]] || 0) + 1; });
+    return Object.keys(m).sort().map(function (k) { return [k, m[k]]; });
+  }
+
+  function initFilters() {
+    var sevBox = document.getElementById("f-sev");
+    SEVERITIES.forEach(function (s) {
+      sevBox.appendChild(el("button", { type: "button", "data-sev": s, "aria-pressed": "false",
+        onclick: function () {
+          var i = state.sev.indexOf(s);
+          if (i === -1) state.sev.push(s); else state.sev.splice(i, 1);
+          state.limit = 60; state.openIssue = null; renderFindings();
+        } }, [el("span", { class: "swatch sw-" + s }), s]));
+    });
+    var cat = document.getElementById("f-cat");
+    cat.appendChild(el("option", { value: "", text: "All areas" }));
+    uniqueSorted("category").forEach(function (c) { cat.appendChild(el("option", { value: c[0], text: c[0] + " (" + fmt(c[1]) + ")" })); });
+    cat.addEventListener("change", function () { state.cat = cat.value; state.limit = 60; state.openIssue = null; renderFindings(); });
+
+    var src = document.getElementById("f-src");
+    src.appendChild(el("option", { value: "", text: "All sources" }));
+    uniqueSorted("source").forEach(function (c) { src.appendChild(el("option", { value: c[0], text: sourceLabel(c[0]) + " (" + fmt(c[1]) + ")" })); });
+    src.addEventListener("change", function () { state.src = src.value; state.limit = 60; state.openIssue = null; renderFindings(); });
+
+    if (MULTI_SUB) {
+      var sub = document.getElementById("f-sub");
+      sub.hidden = false;
+      sub.appendChild(el("option", { value: "", text: "All subscriptions" }));
+      var counts = FINDINGS.reduce(function (m, f) { var k = f.subscriptionName || "Tenant"; m[k] = (m[k] || 0) + 1; return m; }, {});
+      Object.keys(counts).sort().forEach(function (k) { sub.appendChild(el("option", { value: k, text: k + " (" + fmt(counts[k]) + ")" })); });
+      sub.addEventListener("change", function () { state.sub = sub.value; state.limit = 60; state.openIssue = null; renderFindings(); });
+    }
+
+    var search = document.getElementById("f-search"), timer;
+    search.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { state.q = search.value.trim().toLowerCase(); state.limit = 60; state.openIssue = null; renderFindings(); }, 150);
+    });
+    document.querySelectorAll("[data-view]").forEach(function (b) {
+      b.addEventListener("click", function () { state.view = b.getAttribute("data-view"); state.limit = 60; renderFindings(); });
+    });
+    document.getElementById("f-reset").addEventListener("click", function () { setFilters({}); });
+  }
+
+  function setFilters(f) {
+    state.q = f.q || ""; state.sev = f.sev ? f.sev.slice() : []; state.cat = f.cat || ""; state.src = f.src || ""; state.sub = f.sub || "";
+    state.openIssue = f.issue || null; state.limit = 60;
+    if (f.issue) state.view = "grouped";
+    document.getElementById("f-search").value = f.q || "";
+    document.getElementById("f-cat").value = state.cat;
+    document.getElementById("f-src").value = state.src;
+    document.getElementById("f-sub").value = state.sub;
+    renderFindings();
+  }
+
+  function filtered() {
+    var q = state.q;
+    return FINDINGS.filter(function (f) {
+      if (state.sev.length && state.sev.indexOf(f.severity) === -1) return false;
+      if (state.cat && f.category !== state.cat) return false;
+      if (state.src && f.source !== state.src) return false;
+      if (state.sub && (f.subscriptionName || "Tenant") !== state.sub) return false;
+      if (q) {
+        var hay = (f.title + " " + f.resource + " " + f.resourceId + " " + f.resourceType + " " + f.finding + " " +
+          f.recommendation + " " + f.checkId + " " + f.frameworks + " " + f.subscriptionName).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderFindings() {
+    document.querySelectorAll("#f-sev button").forEach(function (b) {
+      b.setAttribute("aria-pressed", state.sev.indexOf(b.getAttribute("data-sev")) !== -1 ? "true" : "false");
+    });
+    document.querySelectorAll("[data-view]").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-view") === state.view ? "true" : "false");
+    });
+
+    var list = filtered();
+    var view = clear(document.getElementById("findings-view"));
+    var issues = groupIssues(list);
+    if (state.openIssue) issues = issues.filter(function (g) { return g.key === state.openIssue; });
+    var shownFindings = state.openIssue ? issues.reduce(function (n, g) { return n + g.items.length; }, 0) : list.length;
+
+    var resultLine = clear(document.getElementById("f-result"));
+    resultLine.appendChild(document.createTextNode(plural(issues.length, "issue") + " · " + plural(shownFindings, "finding")));
+    if (state.openIssue) {
+      resultLine.appendChild(document.createTextNode(" · "));
+      resultLine.appendChild(el("a", { href: "#", onclick: function (e) { e.preventDefault(); state.openIssue = null; renderFindings(); }, text: "show all matching issues" }));
+    }
+
+    if (!list.length || !issues.length) {
+      view.appendChild(el("div", { class: "card empty", text: "No findings match the current filters." }));
+      return;
+    }
+
+    if (state.view === "flat") {
+      var rows = state.openIssue ? issues[0].items : list.slice().sort(function (a, b) { return sevIndex(a.severity) - sevIndex(b.severity); });
+      var tbody = el("tbody");
+      rows.slice(0, state.limit * 5).forEach(function (f) {
+        tbody.appendChild(el("tr", {}, [
+          el("td", {}, [sevPill(f.severity)]),
+          el("td", {}, [el("div", { style: "font-weight:600", text: f.title }), el("div", { class: "muted clamp", text: f.finding !== f.title ? f.finding : "" })]),
+          el("td", {}, [el("div", { text: f.resource }), el("div", { class: "muted", style: "font-size:12px", text: f.resourceType + (MULTI_SUB && f.subscriptionName ? " · " + f.subscriptionName : "") })]),
+          el("td", { text: f.category }),
+          el("td", { text: sourceLabel(f.source) })
+        ]));
+      });
+      view.appendChild(el("div", { class: "card" }, [el("div", { class: "table-wrap" }, [el("table", {}, [
+        el("thead", {}, [el("tr", {}, [el("th", { style: "width:110px", text: "Severity" }), el("th", { text: "Finding" }), el("th", { text: "Resource" }), el("th", { text: "Area" }), el("th", { text: "Source" })])]),
+        tbody
+      ])])]));
+      if (rows.length > state.limit * 5) view.appendChild(moreButton(rows.length - state.limit * 5, "rows"));
+      return;
+    }
+
+    var box = el("div", { class: "issues" });
+    issues.slice(0, state.limit).forEach(function (g) { box.appendChild(issueCard(g, issues.length === 1 || state.openIssue === g.key)); });
+    view.appendChild(box);
+    if (issues.length > state.limit) view.appendChild(moreButton(issues.length - state.limit, "issues"));
+  }
+
+  function moreButton(remaining, what) {
+    return el("div", { class: "more" }, [el("button", { class: "btn", type: "button",
+      onclick: function () { state.limit += 60; renderFindings(); }, text: "Show more (" + fmt(remaining) + " more " + what + ")" })]);
+  }
+
+  function issueCard(g, open) {
+    var body = el("div", { class: "issue-body" });
+    var rendered = false;
+    function fill() {
+      if (rendered) return; rendered = true;
+      var kv = el("dl", { class: "kv" });
+      function row(label, content) { if (!content) return; kv.appendChild(el("dt", { text: label })); kv.appendChild(el("dd", {}, [content])); }
+      row("Recommendation", g.recommendation ? el("span", { text: g.recommendation }) : null);
+      var url = safeUrl(g.reference);
+      row("Reference", url ? el("a", { href: url, target: "_blank", rel: "noopener noreferrer", text: url }) : null);
+      row("Frameworks", g.frameworks ? el("span", { text: g.frameworks }) : null);
+      row("Check ID", g.checkId ? el("span", { class: "mono", text: g.checkId }) : null);
+      body.appendChild(kv);
+
+      var tbody = el("tbody");
+      var items = g.items.slice().sort(function (a, b) { return sevIndex(a.severity) - sevIndex(b.severity) || a.resource.localeCompare(b.resource); });
+      var cap = 200;
+      items.slice(0, cap).forEach(function (f) {
+        tbody.appendChild(el("tr", {}, [
+          el("td", {}, [el("div", { text: f.resource || "—" }), f.resourceId ? el("div", { class: "mono muted", text: f.resourceId }) : null]),
+          el("td", { class: "muted" }, [el("div", { text: f.resourceType }), MULTI_SUB && f.subscriptionName ? el("div", { style: "font-size:12px", text: f.subscriptionName }) : null]),
+          el("td", { text: f.finding !== g.title ? f.finding : "" }),
+          el("td", {}, [sevPill(f.severity)])
+        ]));
+      });
+      body.appendChild(el("div", { class: "table-wrap" }, [el("table", {}, [
+        el("thead", {}, [el("tr", {}, [el("th", { text: "Resource" }), el("th", { text: "Type" }), el("th", { text: "Detail" }), el("th", { text: "Severity" })])]),
+        tbody
+      ])]));
+      if (items.length > cap) body.appendChild(el("p", { class: "muted", text: "Showing " + cap + " of " + fmt(items.length) + " findings. Use Export CSV for the full list." }));
+    }
+
+    var d = el("details", { class: "issue" }, [
+      el("summary", {}, [
+        el("div", { class: "issue-sev" }, [sevPill(g.severity)]),
+        el("div", {}, [
+          el("div", { class: "issue-title", text: g.title }),
+          el("div", { class: "issue-tags" }, [el("span", { class: "chip", text: g.category }), el("span", { class: "chip", text: sourceLabel(g.source) })])
+        ]),
+        el("div", { class: "issue-count" }, [plural(g.resourceCount, "resource")])
+      ]),
+      body
+    ]);
+    d.addEventListener("toggle", function () { if (d.open) fill(); });
+    d.firstChild.addEventListener("click", fill);   // render before the async toggle event
+    if (open) { d.open = true; fill(); }
+    return d;
+  }
+
+  // ── Resources tab ───────────────────────────────────────
+  var rState = { q: "", limit: 100 };
+  var RESOURCES = (function () {
+    var m = {};
+    FINDINGS.forEach(function (f) {
+      var k = resourceKey(f);
+      var r = m[k] || (m[k] = { key: k, name: f.resource || f.resourceId || "(tenant)", id: f.resourceId, type: f.resourceType, bySev: {}, total: 0, score: 0, sources: {} });
+      if (!r.id && f.resourceId) r.id = f.resourceId;
+      if ((!r.type || r.type === "Unknown") && f.resourceType) r.type = f.resourceType;
+      r.bySev[f.severity] = (r.bySev[f.severity] || 0) + 1;
+      r.total++; r.score += SEV_WEIGHT[f.severity] || 0;
+      r.sources[sourceLabel(f.source)] = true;
+    });
+    return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return b.score - a.score || b.total - a.total; });
+  })();
+
+  function renderResources() {
+    document.getElementById("tab-count-resources").textContent = fmt(RESOURCES.length);
+    var q = rState.q;
+    var rows = RESOURCES.filter(function (r) { return !q || (r.name + " " + r.type + " " + (r.id || "")).toLowerCase().indexOf(q) !== -1; });
+    var max = RESOURCES.reduce(function (m, r) { return Math.max(m, r.total); }, 1);
+    var body = clear(document.getElementById("resource-rows"));
+    rows.slice(0, rState.limit).forEach(function (r) {
+      var stack = el("div", { class: "bar-stack", style: "width:" + Math.max(4, Math.round(100 * r.total / max)) + "%" });
+      SEVERITIES.forEach(function (sev) {
+        var n = r.bySev[sev] || 0; if (!n) return;
+        stack.appendChild(el("div", { class: "bar-seg sw-" + sev, style: "flex:" + n + " 1 0", tabindex: "0", role: "img", "aria-label": plural(n, sev.toLowerCase() + " finding"),
+          onpointermove: function (e) { showTip(e, plural(n, "finding"), sev, "var(--sev-" + sev.toLowerCase() + ")"); },
+          onpointerleave: hideTip, onfocus: function (e) { showTip(e, plural(n, "finding"), sev, "var(--sev-" + sev.toLowerCase() + ")"); }, onblur: hideTip }));
+      });
+      body.appendChild(el("tr", { class: "clickable", onclick: function () { hideTip(); openFindings({ q: (r.id || r.name).toLowerCase() }); } }, [
+        el("td", {}, [el("div", { style: "font-weight:600", text: r.name }), r.id ? el("div", { class: "mono muted", text: r.id }) : null]),
+        el("td", { class: "muted", text: r.type || "" }),
+        el("td", {}, [el("div", { class: "bar-track" }, [stack])]),
+        el("td", { class: "num", text: fmt(r.total) }),
+        el("td", {}, Object.keys(r.sources).map(function (s) { return el("span", { class: "chip", style: "margin:0 4px 4px 0", text: s }); }))
+      ]));
+    });
+    var more = clear(document.getElementById("r-more"));
+    if (rows.length > rState.limit) more.appendChild(el("button", { class: "btn", type: "button", onclick: function () { rState.limit += 100; renderResources(); }, text: "Show more (" + fmt(rows.length - rState.limit) + ")" }));
+    if (!rows.length) body.appendChild(el("tr", {}, [el("td", { colspan: "5", class: "muted", text: "No resources match." })]));
+  }
+
+  // ── Tools tab ───────────────────────────────────────────
+  function renderToolRows() {
+    var body = clear(document.getElementById("tool-rows"));
+    TOOLS.forEach(function (t) {
+      var links = (t.Reports || []).filter(function (r) { return r && r.Path; }).map(function (r) {
+        return el("div", {}, [el("a", { href: encodeURI(r.Path), target: "_blank", rel: "noopener", text: r.Label })]);
+      });
+      if (t.Message) links.push(el("div", { class: "muted", style: "font-size:12px", text: t.Message }));
+      var dur = t.DurationSeconds > 0 ? (t.DurationSeconds >= 90 ? Math.round(t.DurationSeconds / 60) + " min" : Math.round(t.DurationSeconds) + " s") : "—";
+      body.appendChild(el("tr", {}, [
+        el("td", {}, [el("div", { style: "font-weight:600", text: t.Tool === "Native" ? "Built-in checks" : t.Tool }), el("div", { class: "muted", style: "font-size:12px", text: t.Description || "" })]),
+        el("td", {}, [statusEl(t.Status)]),
+        el("td", { class: "muted", text: t.Version || "—" }),
+        el("td", { class: "muted", text: t.Scope || "—" }),
+        el("td", { class: "num", text: dur }),
+        el("td", { class: "num", text: t.Passed >= 0 ? fmt(t.Passed) : "—" }),
+        el("td", { class: "num", text: t.Failed >= 0 ? fmt(t.Failed) : "—" }),
+        el("td", { class: "num", text: fmt(t.FindingCount || 0) }),
+        el("td", {}, links)
+      ]));
+    });
+  }
+
+  // ── Tabs & actions ──────────────────────────────────────
+  function selectTab(name) {
+    document.querySelectorAll(".tab").forEach(function (t) { t.setAttribute("aria-selected", t.getAttribute("data-tab") === name ? "true" : "false"); });
+    document.querySelectorAll("main > section").forEach(function (s) { s.hidden = s.id !== "tab-" + name; });
+    hideTip();
+    try { history.replaceState(null, "", "#" + name); } catch (e) { /* file:// in some browsers */ }
+  }
+  function openFindings(f) { setFilters(f); selectTab("findings"); window.scrollTo(0, 0); }
+
+  function exportCsv() {
+    var cols = ["Severity", "Category", "Source", "CheckId", "Title", "Resource", "ResourceType", "ResourceId", "SubscriptionName", "SubscriptionId", "Finding", "Recommendation", "Reference", "Frameworks"];
+    var keys = ["severity", "category", "source", "checkId", "title", "resource", "resourceType", "resourceId", "subscriptionName", "subscriptionId", "finding", "recommendation", "reference", "frameworks"];
+    var rows = filtered();
+    if (state.openIssue) rows = rows.filter(function (f) { return f.source + "::" + (f.checkId || f.title) === state.openIssue; });
+    var esc = function (v) { v = String(v == null ? "" : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+    var lines = [cols.join(";")].concat(rows.map(function (f) { return keys.map(function (k) { return esc(f[k]); }).join(";"); }));
+    var blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    var a = el("a", { href: URL.createObjectURL(blob), download: (META.fileBaseName || "azure-audit") + "-findings.csv" });
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  function init() {
+    renderHeader();
+    renderOverview();
+    initFilters();
+    renderFindings();
+    renderResources();
+    renderToolRows();
+
+    document.querySelectorAll(".tab").forEach(function (t) { t.addEventListener("click", function () { selectTab(t.getAttribute("data-tab")); }); });
+    document.querySelectorAll("[data-measure]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        document.querySelectorAll("[data-measure]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        renderCategoryBars(b.getAttribute("data-measure"));
+      });
+    });
+    document.getElementById("btn-all-findings").addEventListener("click", function () { openFindings({}); });
+    document.getElementById("btn-print").addEventListener("click", function () { window.print(); });
+    document.getElementById("btn-csv").addEventListener("click", exportCsv);
+    document.getElementById("btn-theme").addEventListener("click", function () {
+      var root = document.documentElement;
+      var dark = root.getAttribute("data-theme") ? root.getAttribute("data-theme") === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.setAttribute("data-theme", dark ? "light" : "dark");
+    });
+    var r = document.getElementById("r-search"), rt;
+    r.addEventListener("input", function () { clearTimeout(rt); rt = setTimeout(function () { rState.q = r.value.trim().toLowerCase(); rState.limit = 100; renderResources(); }, 150); });
+    window.addEventListener("scroll", hideTip, { passive: true });
+
+    var h = (location.hash || "").replace("#", "");
+    if (["overview", "findings", "resources", "tools"].indexOf(h) !== -1) selectTab(h);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

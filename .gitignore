@@ -1,2 +1,4 @@
 tools/
-AzureAudit_*/
+# Audit output (run folders and any exported report/CSV) - contains customer data
+AzureAudit_*
+*.ocsf.json

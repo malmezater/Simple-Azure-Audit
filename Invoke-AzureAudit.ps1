@@ -90,7 +90,7 @@
     .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -SubscriptionId "xxxxxxxx-..." -OutputPath "C:\Temp\AuditReports" -InstallMissing
 
 .EXAMPLE
-    .\Invoke-AzureAudit.ps1 -Tools Native,Prowler,Maester -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
+    .\Invoke-AzureAudit.ps1 -Tools Native,Prowler,Maester -CustomerName "Contoso AB" -PreparedBy "Company Name" -OpenReport
 
 .EXAMPLE
     .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -AllSubscriptions -CustomerName "Contoso AB" -OpenReport

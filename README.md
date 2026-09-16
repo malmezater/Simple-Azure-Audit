@@ -20,6 +20,8 @@ All tools are free and run **read-only**.
 
 Each run creates a folder with a self-contained HTML file that works offline and can be sent to a customer.
 
+> **Example:** open [`Demo_AzureAudit_Report.html`](Demo_AzureAudit_Report.html) to see a report built from fictional data (Northwind Traders, two made-up subscriptions).
+
 - **Overview** – number of critical/high issues, severity tiles, *where the risk is* per area, tool coverage with pass rates, and the top 10 priorities.
 - **Findings** – grouped per issue (one check, many resources) or as a flat list. Filter by severity, area, source and free text. Every issue shows recommendation, reference link, compliance mapping and affected resources.
 - **Resources** – the most affected resources, with which tools flagged them.
@@ -61,7 +63,14 @@ A *finding* is one failed check on one resource. An *issue* groups all findings 
 
 ### Option 1 – prepare a dedicated machine (recommended)
 
-1. Install the winget apps and PowerShell modules listed in [`PAWDeploy-AzureAudit.xml`](PAWDeploy-AzureAudit.xml) (PowerShell 7, Azure CLI, Python 3.12 + all modules).
+1. Install the apps with winget (or deploy the machine with a PAWDeploy profile that includes the *Security Audit* package):
+
+```powershell
+winget install --id Microsoft.PowerShell -e
+winget install --id Microsoft.AzureCLI -e
+winget install --id Python.Python.3.12 -e
+```
+
 2. Run the prerequisites script from an elevated PowerShell 7 prompt. It installs/updates the modules, installs Prowler in a Python venv under `%ProgramData%\SimpleAzureAudit\prowler` (added to PATH), downloads AzGovViz and the Maester tests into `.\tools`:
 
 ```powershell
@@ -148,13 +157,13 @@ All selected subscriptions end up in **one** report. The built-in checks run onc
 
 ```powershell
 .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -SubscriptionId "xxxxxxxx-..." `
-    -OutputPath "C:\Temp\AuditReports" -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
+    -OutputPath "C:\Temp\AuditReports" -CustomerName "Contoso AB" -PreparedBy "Company Name" -OpenReport
 ```
 
 **Whole tenant in one report:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -AllSubscriptions -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
+.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -AllSubscriptions -CustomerName "Contoso AB" -PreparedBy "Company Name" -OpenReport
 ```
 
 **A few selected subscriptions:**
@@ -226,7 +235,7 @@ AzureAudit_<Subscription | Customer_Nsubs>_<timestamp>/
 ```
 Invoke-AzureAudit.ps1            # Parameters, sign-in, orchestration, summary
 Install-AuditPrerequisites.ps1   # Installs modules, Prowler, AzGovViz and Maester tests (no audit)
-PAWDeploy-AzureAudit.xml         # Winget apps + PowerShell modules for PAWDeploy
+Demo_AzureAudit_Report.html      # Example report built from fictional data
 src/
 ├── AuditCommon.ps1              # Helpers, Add-Finding, tool-run register
 ├── Checks.Security.ps1          # Built-in: NSG, public IPs, RBAC, classic admins
