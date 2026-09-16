@@ -97,7 +97,7 @@ Checks that cannot run because of missing permissions produce no findings – a 
 ## 🚀 Usage
 
 ```powershell
-.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-SubscriptionId <string>] [-OutputPath <string>]
+.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-SubscriptionId <string[]> | -AllSubscriptions] [-OutputPath <string>]
                         [-Tools <All|Native|Prowler|Maester|PSRule|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
                         [-ManagementGroupId <string>] [-ToolsPath <string>] [-InstallMissing]
                         [-CustomerName <string>] [-PreparedBy <string>] [-RequiredTags <string>]
@@ -106,17 +106,29 @@ Checks that cannot run because of missing permissions produce no findings – a 
 
 ### Sign-in
 
-1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and selects the subscription, prompting when several are available.
+1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and resolves the subscriptions in scope (see below).
 2. PowerShell-based tools (PSRule, AzGovViz, WARA, ARI) run in a child `pwsh` process and reuse that Az sign-in.
 3. **Maester** signs in to Microsoft Graph interactively (`Connect-Maester`).
 4. **Prowler** reuses `az login` when the Azure CLI is signed in to the same tenant; otherwise it opens a browser sign-in.
+
+### Choosing subscriptions
+
+| How | Result |
+|-----|--------|
+| `-SubscriptionId "<id>"` | One subscription. |
+| `-SubscriptionId "<id1>","<id2>"` or `"<id1>,<id2>"` | Several subscriptions (IDs or names). |
+| `-AllSubscriptions` | Every **enabled** subscription the account can see in the tenant. |
+| Neither | The tenant has one subscription: it is used. Otherwise a numbered list is shown and you answer e.g. `2`, `1-3`, `1,3,5`, `1-3,6` or `all`. |
+
+All selected subscriptions end up in **one** report. The built-in checks run once per subscription; Prowler, PSRule, WARA, ARI and AzGovViz receive the whole list in a single run; Maester runs once for the tenant. With more than one subscription the report adds a **By subscription** table on the overview and a subscription filter on the Findings tab, and the CSV gets a `SubscriptionName` column.
 
 ### Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `-TenantID` | Active context | Tenant to sign in to. |
-| `-SubscriptionId` | Prompt | Subscription to audit. |
+| `-SubscriptionId` | Prompt | One or more subscription IDs or names to audit. |
+| `-AllSubscriptions` | Off | Audit every enabled subscription in the tenant without prompting. |
 | `-OutputPath` | `.` | Where the run folder is created. |
 | `-Tools` | `All` | Which assessments to run. |
 | `-ExcludeTools` | – | Tools to skip, e.g. `-ExcludeTools ARI,AzGovViz`. |
@@ -137,6 +149,18 @@ Checks that cannot run because of missing permissions produce no findings – a 
 ```powershell
 .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -SubscriptionId "xxxxxxxx-..." `
     -OutputPath "C:\Temp\AuditReports" -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
+```
+
+**Whole tenant in one report:**
+
+```powershell
+.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -AllSubscriptions -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
+```
+
+**A few selected subscriptions:**
+
+```powershell
+.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -SubscriptionId "sub-id-1","sub-id-2","sub-id-3" -OpenReport
 ```
 
 **Quick run – built-in checks, Prowler and Maester only:**
@@ -162,7 +186,7 @@ Checks that cannot run because of missing permissions produce no findings – a 
 ## 📊 Output
 
 ```
-AzureAudit_<Subscription>_<timestamp>/
+AzureAudit_<Subscription | Customer_Nsubs>_<timestamp>/
 ├── AzureAudit_<Subscription>_<timestamp>.html   # Interactive report (self-contained)
 ├── AzureAudit_<Subscription>_<timestamp>.csv    # All findings, semicolon-separated, UTF-8
 ├── audit-data.json                              # Merged, normalised data (findings + tool runs)
@@ -187,7 +211,8 @@ AzureAudit_<Subscription>_<timestamp>/
 | Source | Native, Azure Advisor, Prowler, Maester, PSRule, AzGovViz, WARA |
 | CheckId | Stable ID of the check (used to group findings into issues and compare runs) |
 | Title | Name of the issue |
-| Resource / ResourceType / ResourceId / SubscriptionId | Affected resource |
+| Resource / ResourceType / ResourceId | Affected resource |
+| SubscriptionName / SubscriptionId | Subscription the finding belongs to (`Tenant` for Entra ID checks) |
 | Finding | Detail for this resource |
 | Recommendation | Suggested action |
 | Reference | Documentation link |

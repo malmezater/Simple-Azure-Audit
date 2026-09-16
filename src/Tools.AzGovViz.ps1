@@ -47,7 +47,7 @@ function Invoke-AzGovVizScan {
         [Parameter(Mandatory)][string]$RunFolder,
         [Parameter(Mandatory)][string]$LogDirectory,
         [Parameter(Mandatory)][string]$TenantId,
-        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][string[]]$SubscriptionIds,
         [string]$ManagementGroupId,
         [Parameter(Mandatory)][string]$ToolsPath,
         [switch]$InstallMissing
@@ -67,15 +67,15 @@ function Invoke-AzGovVizScan {
     $script = @"
 & $(ConvertTo-PSLiteral $scriptPath) ``
     -ManagementGroupId $(ConvertTo-PSLiteral $ManagementGroupId) ``
-    -SubscriptionId4AzContext $(ConvertTo-PSLiteral $SubscriptionId) ``
+    -SubscriptionId4AzContext $(ConvertTo-PSLiteral $SubscriptionIds[0]) ``
     -TenantId4AzContext $(ConvertTo-PSLiteral $TenantId) ``
-    -SubscriptionIdWhitelist @($(ConvertTo-PSLiteral $SubscriptionId)) ``
+    -SubscriptionIdWhitelist $(ConvertTo-PSArrayLiteral $SubscriptionIds) ``
     -OutputPath $(ConvertTo-PSLiteral $RawFolder) ``
     -NoPIMEligibility ``
     -StatsOptOut
 "@
 
-    Write-Step "  Scanning management group '$ManagementGroupId' (subscription filter: $SubscriptionId)..." "Gray"
+    Write-Step "  Scanning management group '$ManagementGroupId' (subscription filter: $(@($SubscriptionIds).Count) subscription(s))..." "Gray"
     $r = Invoke-ToolProcess -Name "AzGovViz" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
     $hasOutput = [bool](Get-LatestFile -Path $RawFolder -Filter "AzGovViz_*.html" -Recurse)
     $status = if ($r.ExitCode -eq 0 -and $hasOutput) { "Succeeded" } elseif ($hasOutput) { "PartiallySucceeded" } else { "Failed" }
@@ -101,7 +101,7 @@ function Import-AzGovVizResults {
     param(
         [Parameter(Mandatory)][string]$RawFolder,
         [Parameter(Mandatory)][string]$RunFolder,
-        [string]$SubscriptionId
+        [string[]]$SubscriptionIds
     )
 
     $html = Get-ChildItem -Path $RawFolder -Filter "AzGovViz_*.html" -File -Recurse -ErrorAction SilentlyContinue |
@@ -113,7 +113,7 @@ function Import-AzGovVizResults {
     }
 
     Write-Step "Importing AzGovViz CSV exports..."
-    $inScope = { param($subId) (-not $SubscriptionId) -or (-not $subId) -or ($subId -eq $SubscriptionId) }
+    $inScope = { param($subId) (-not $SubscriptionIds) -or (-not $subId) -or ($subId -in $SubscriptionIds) }
     $count = 0
 
     # ── Orphaned / unused resources ─────────────────────────

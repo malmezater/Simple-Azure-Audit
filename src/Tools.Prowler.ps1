@@ -14,7 +14,7 @@ function Invoke-ProwlerScan {
         [Parameter(Mandatory)][string]$RunFolder,
         [Parameter(Mandatory)][string]$LogDirectory,
         [Parameter(Mandatory)][string]$TenantId,
-        [Parameter(Mandatory)][string]$SubscriptionId
+        [Parameter(Mandatory)][string[]]$SubscriptionIds
     )
 
     # PATH first, then the shared venv created by Install-AuditPrerequisites.ps1.
@@ -44,7 +44,7 @@ function Invoke-ProwlerScan {
     $prowlerExe = $exe.Source
     $version = "$(& $prowlerExe --version 2>$null)".Trim()
     $prowlerArgs = @("azure") + $authArgs + @(
-        "--subscription-ids", $SubscriptionId,
+        "--subscription-ids") + @($SubscriptionIds) + @(
         "--output-formats", "csv", "json-ocsf", "html",
         "--output-directory", $RawFolder,
         "--output-filename", "prowler",
@@ -101,7 +101,8 @@ function Import-ProwlerResults {
 
     Write-Step "Importing $($json.Name)..."
     $items = @(Read-JsonFile $json.FullName)
-    $passed = 0; $failed = 0; $count = 0; $version = ""; $scope = ""
+    $passed = 0; $failed = 0; $count = 0; $version = ""
+    $accounts = [System.Collections.Generic.List[string]]::new()
 
     foreach ($f in $items) {
         if (-not $version) { $version = "$(Get-PropValue $f @('metadata','product','version'))" }
@@ -114,7 +115,8 @@ function Import-ProwlerResults {
         $resource = @(Get-PropValue $f 'resources') | Select-Object -First 1
         $service  = "$(Get-PropValue $resource @('group','name'))"
         $subId    = "$(Get-PropValue $f @('cloud','account','uid'))"
-        if (-not $scope) { $scope = "$(Get-PropValue $f @('cloud','account','name'))" }
+        $accountName = "$(Get-PropValue $f @('cloud','account','name'))"
+        if ($accountName -and -not $accounts.Contains($accountName)) { [void]$accounts.Add($accountName) }
 
         # Compliance mapping: { "CIS-3.0": ["2.1.1"], "ISO27001-2022": ["A.8.1"] }
         $frameworks = ""
@@ -150,6 +152,7 @@ function Import-ProwlerResults {
         New-ReportLink -Label "Prowler CSV"         -File (Get-LatestFile -Path $RawFolder -Filter "*.csv")  -RunFolder $RunFolder
     ) | Where-Object { $_ }
 
+    $scope = if ($accounts.Count -eq 1) { $accounts[0] } elseif ($accounts.Count -gt 1) { "$($accounts.Count) subscriptions" } else { "" }
     Write-Step "  $failed failed / $passed passed checks imported." "Gray"
     Complete-ToolImport -Tool "Prowler" -RawFolder $RawFolder -FindingCount $count `
         -Passed $passed -Failed $failed -Total ($passed + $failed) -Version $version -Scope $scope -Reports $reports

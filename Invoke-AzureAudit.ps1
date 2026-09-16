@@ -44,7 +44,11 @@
     Tenant to sign in to. Omitted = the active context is used.
 
 .PARAMETER SubscriptionId
-    Subscription ID to run against. Omitted = you are prompted when several are available.
+    One or more subscription IDs to audit (array or comma-separated). Omitted = you are prompted
+    when several are available and can answer e.g. 2, 1-3, 1,3,5 or all.
+
+.PARAMETER AllSubscriptions
+    Audit every enabled subscription the account can see in the tenant, without prompting.
 
 .PARAMETER OutputPath
     Folder where the run folder is created. Default: current directory.
@@ -89,6 +93,12 @@
     .\Invoke-AzureAudit.ps1 -Tools Native,Prowler,Maester -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
 
 .EXAMPLE
+    .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -AllSubscriptions -CustomerName "Contoso AB" -OpenReport
+
+.EXAMPLE
+    .\Invoke-AzureAudit.ps1 -SubscriptionId "sub-id-1","sub-id-2" -OpenReport
+
+.EXAMPLE
     .\Invoke-AzureAudit.ps1 -ImportFrom "C:\Temp\AuditReports\AzureAudit_Prod_2026-09-16_08-12" -OpenReport
 
 .NOTES
@@ -99,7 +109,8 @@
 [CmdletBinding()]
 param(
     [string]   $TenantID,
-    [string]   $SubscriptionId,
+    [string[]] $SubscriptionId,
+    [switch]   $AllSubscriptions,
     [string]   $OutputPath    = ".",
     [string]   $RequiredTags  = "Environment,Owner,CostCenter",
     [ValidateSet("All","Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")]
@@ -121,6 +132,13 @@ $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference     = "SilentlyContinue"
 $ScriptVersion         = "2.0.0"
 
+function Stop-Audit {
+    # $ErrorActionPreference is SilentlyContinue for the Az calls, which would also swallow 'throw'.
+    param([Parameter(Mandatory)][string]$Message)
+    Write-Host "`nERROR: $Message" -ForegroundColor Red
+    exit 1
+}
+
 # ─────────────────────────────────────────────────────────────
 # LOAD SUBMODULES
 # ─────────────────────────────────────────────────────────────
@@ -138,7 +156,7 @@ foreach ($file in @(
 $allTools = @("Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")
 $selectedTools = if ($Tools -contains "All") { $allTools } else { $allTools | Where-Object { $_ -in $Tools } }
 $selectedTools = @($selectedTools | Where-Object { $_ -notin $ExcludeTools })
-if ($selectedTools.Count -eq 0) { throw "No tools selected. Check -Tools / -ExcludeTools." }
+if ($selectedTools.Count -eq 0) { Stop-Audit "No tools selected. Check -Tools / -ExcludeTools." }
 
 Write-Host @"
 
@@ -155,17 +173,20 @@ Write-Host @"
 if ($ImportFrom) {
     $runFolder = (Resolve-Path -LiteralPath $ImportFrom -ErrorAction Stop).Path
     $runInfoPath = Join-Path $runFolder "run.json"
-    if (-not (Test-Path $runInfoPath)) { throw "run.json not found in $runFolder - is this an Invoke-AzureAudit run folder?" }
+    if (-not (Test-Path $runInfoPath)) { Stop-Audit "run.json not found in $runFolder - is this an Invoke-AzureAudit run folder?" }
     $runInfo = Read-JsonFile $runInfoPath
 
-    $subName  = "$(Get-PropValue $runInfo 'SubscriptionName')"
-    $subId    = "$(Get-PropValue $runInfo 'SubscriptionId')"
     $tenant   = "$(Get-PropValue $runInfo 'TenantId')"
+    $scopeSubs = @(Get-PropValue $runInfo 'Subscriptions' | Where-Object { $_ } | ForEach-Object {
+        [PSCustomObject]@{ Id = "$(Get-PropValue $_ 'Id')"; Name = "$(Get-PropValue $_ 'Name')" }
+    })
+    if ($scopeSubs.Count -eq 0) {   # run folders created before multi-subscription support
+        $scopeSubs = @([PSCustomObject]@{ Id = "$(Get-PropValue $runInfo 'SubscriptionId')"; Name = "$(Get-PropValue $runInfo 'SubscriptionName')" })
+    }
     $baseName = "$(Get-PropValue $runInfo 'BaseName')"
     if (-not $CustomerName) { $CustomerName = "$(Get-PropValue $runInfo 'CustomerName')" }
     if (-not $PreparedBy)   { $PreparedBy   = "$(Get-PropValue $runInfo 'PreparedBy')" }
-    $script:AuditContext.SubscriptionId = $subId
-    $script:AuditContext.SubscriptionName = $subName
+    $script:AuditContext.Subscriptions = $scopeSubs
     $script:AuditContext.TenantId = $tenant
 
     Write-Host "`n  Rebuilding report from: $runFolder" -ForegroundColor White
@@ -176,12 +197,12 @@ if ($ImportFrom) {
         $nativeItems = @(Read-JsonFile $nativeFile)
         Import-FindingObjects -Items $nativeItems
         Complete-ToolImport -Tool "Native" -RawFolder $nativeRaw -FindingCount $nativeItems.Count `
-            -Scope "Subscription: $subName" -Version $ScriptVersion
+            -Scope (Get-ScopeLabel $scopeSubs) -Version $ScriptVersion
     }
 
     $present = @($selectedTools | Where-Object { $_ -ne "Native" -and (Test-Path (Join-Path (Join-Path $runFolder "raw") $_.ToLower())) })
     if ($present.Count -gt 0) {
-        Invoke-AuditTools -Tools $present -RunFolder $runFolder -TenantId $tenant -SubscriptionId $subId -ImportOnly
+        Invoke-AuditTools -Tools $present -RunFolder $runFolder -TenantId $tenant -SubscriptionIds $scopeSubs.Id -ImportOnly
     }
     $generatedAt = "$(Get-PropValue $runInfo 'StartedAt')"
 }
@@ -197,7 +218,7 @@ else {
     }
     $missingModules = @($requiredModules | Where-Object { -not (Get-Module -ListAvailable -Name $_) })
     if ($missingModules.Count -gt 0) {
-        throw "Missing required modules: $($missingModules -join ', '). Install with: Install-Module $($missingModules -join ', ') -Scope CurrentUser"
+        Stop-Audit "Missing required modules: $($missingModules -join ', '). Install with: Install-Module $($missingModules -join ', ') -Scope CurrentUser"
     }
 
     if (-not (Get-AzContext -ErrorAction SilentlyContinue) -or ($TenantID -and (Get-AzContext).Tenant.Id -ne $TenantID)) {
@@ -206,64 +227,76 @@ else {
         else { Connect-AzAccount | Out-Null }
     }
 
-    if ($SubscriptionId) {
-        Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
+    # ── Subscription scope ───────────────────────────────────
+    $subParams = @{ ErrorAction = "SilentlyContinue" }
+    if ($TenantID) { $subParams.TenantId = $TenantID }
+    $available = @(Get-AzSubscription @subParams | Where-Object { $_.State -eq "Enabled" } | Sort-Object Name)
+    if ($available.Count -eq 0) { Stop-Audit "No enabled subscriptions were found for the signed-in account." }
+
+    $requestedIds = @($SubscriptionId | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ })
+    if ($requestedIds.Count -gt 0) {
+        $selected = @(foreach ($id in $requestedIds) {
+            $match = $available | Where-Object { $_.Id -eq $id -or $_.Name -eq $id } | Select-Object -First 1
+            if (-not $match) { Stop-Audit "Subscription '$id' was not found or is not enabled for this account." }
+            $match
+        })
+    }
+    elseif ($AllSubscriptions -or $available.Count -eq 1) {
+        $selected = $available
     }
     else {
-        $subParams = @{ ErrorAction = "SilentlyContinue" }
-        if ($TenantID) { $subParams.TenantId = $TenantID }
-        $subscriptions = @(Get-AzSubscription @subParams | Where-Object { $_.State -eq "Enabled" })
-
-        if ($subscriptions.Count -eq 0) {
-            throw "No enabled subscriptions were found for the signed-in account."
+        Write-Host "`nSubscriptions available:`n" -ForegroundColor Yellow
+        for ($i = 0; $i -lt $available.Count; $i++) {
+            Write-Host ("  [{0,2}] {1}  ({2})" -f ($i + 1), $available[$i].Name, $available[$i].Id) -ForegroundColor White
         }
-        elseif ($subscriptions.Count -eq 1) {
-            Set-AzContext -SubscriptionId $subscriptions[0].Id | Out-Null
-        }
-        else {
-            Write-Host "`nMultiple subscriptions found. Please choose one:`n" -ForegroundColor Yellow
-            for ($i = 0; $i -lt $subscriptions.Count; $i++) {
-                Write-Host ("  [{0}] {1}  ({2})" -f ($i + 1), $subscriptions[$i].Name, $subscriptions[$i].Id) -ForegroundColor White
+        $selected = $null
+        while (-not $selected) {
+            $answer = Read-Host "`nWhich subscriptions? (e.g. 2, 1-3, 1,3,5 or all)"
+            $indexes = Resolve-SubscriptionSelection -Selection $answer -Count $available.Count
+            if ($null -eq $indexes -or @($indexes).Count -eq 0) {
+                Write-Host "Invalid selection. Use numbers between 1 and $($available.Count), ranges like 1-3, or 'all'." -ForegroundColor Red
             }
-            $choice = $null
-            while (-not $choice) {
-                $answer = Read-Host "`nEnter the number of the subscription to audit (1-$($subscriptions.Count))"
-                if ($answer -match '^\d+$' -and [int]$answer -ge 1 -and [int]$answer -le $subscriptions.Count) {
-                    $choice = $subscriptions[[int]$answer - 1]
-                }
-                else {
-                    Write-Host "Invalid selection. Please enter a number between 1 and $($subscriptions.Count)." -ForegroundColor Red
-                }
+            else {
+                $selected = @($indexes | ForEach-Object { $available[$_] })
             }
-            Set-AzContext -SubscriptionId $choice.Id | Out-Null
         }
     }
 
+    # De-duplicate while keeping order
+    $seenSubs = @{}
+    $scopeSubs = @(foreach ($sub in $selected) {
+        if ($seenSubs.ContainsKey($sub.Id)) { continue }
+        $seenSubs[$sub.Id] = $true
+        [PSCustomObject]@{ Id = $sub.Id; Name = $sub.Name }
+    })
+
+    Set-AzContext -SubscriptionId $scopeSubs[0].Id | Out-Null
     $ctx     = Get-AzContext
-    $subName = $ctx.Subscription.Name
-    $subId   = $ctx.Subscription.Id
     $tenant  = $ctx.Tenant.Id
     $reqTags = $RequiredTags -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-    $script:AuditContext.SubscriptionId = $subId
-    $script:AuditContext.SubscriptionName = $subName
+    $script:AuditContext.Subscriptions = $scopeSubs
     $script:AuditContext.TenantId = $tenant
 
     if (-not (Test-Path $OutputPath)) { New-Item -ItemType Directory -Path $OutputPath | Out-Null }
     $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
-    $baseName  = "AzureAudit_$($subName -replace '[^a-zA-Z0-9]','_')_$timestamp"
+    $scopeName = if ($scopeSubs.Count -eq 1) { $scopeSubs[0].Name }
+                 elseif ($CustomerName) { "$CustomerName`_$($scopeSubs.Count)subs" }
+                 else { "$($scopeSubs.Count)subscriptions" }
+    $baseName  = "AzureAudit_$($scopeName -replace '[^a-zA-Z0-9]','_')_$timestamp"
     $runFolder = Join-Path (Resolve-Path $OutputPath).Path $baseName
     New-Item -ItemType Directory -Force -Path $runFolder | Out-Null
     $generatedAt = Get-Date -Format "yyyy-MM-dd HH:mm"
 
     [ordered]@{
-        BaseName = $baseName; SubscriptionName = $subName; SubscriptionId = $subId; TenantId = $tenant
+        BaseName = $baseName; TenantId = $tenant; Subscriptions = $scopeSubs
+        SubscriptionName = $scopeSubs[0].Name; SubscriptionId = $scopeSubs[0].Id
         CustomerName = $CustomerName; PreparedBy = $PreparedBy; StartedAt = $generatedAt
         Tools = $selectedTools; ScriptVersion = $ScriptVersion; Account = "$($ctx.Account.Id)"
     } | ConvertTo-Json | Set-Content -Path (Join-Path $runFolder "run.json") -Encoding utf8
 
-    Write-Host "`n  Subscription : $subName" -ForegroundColor White
-    Write-Host "  ID           : $subId"    -ForegroundColor Gray
-    Write-Host "  Tenant       : $tenant"   -ForegroundColor Gray
+    Write-Host "`n  Tenant       : $tenant" -ForegroundColor Gray
+    Write-Host "  Subscriptions: $($scopeSubs.Count)" -ForegroundColor White
+    foreach ($sub in $scopeSubs) { Write-Host "    - $($sub.Name)  ($($sub.Id))" -ForegroundColor Gray }
     Write-Host "  Tools        : $($selectedTools -join ', ')" -ForegroundColor Gray
     Write-Host "  Run folder   : $runFolder" -ForegroundColor Gray
     Write-Host "  Start time   : $(Get-Date -Format 'HH:mm:ss')`n" -ForegroundColor Gray
@@ -271,28 +304,38 @@ else {
     # ── Built-in checks ──────────────────────────────────────
     if ("Native" -in $selectedTools) {
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        Invoke-SecurityChecks       -SubscriptionId $subId -SubscriptionName $subName
-        Invoke-CostChecks
-        Invoke-InfrastructureChecks
-        Invoke-ComplianceChecks     -RequiredTags $reqTags
-        Invoke-AdvisorChecks        -SkipAdvisor:$SkipAdvisor
+        $n = 0
+        foreach ($sub in $scopeSubs) {
+            $n++
+            Write-Host "`n══ Built-in checks $n/$($scopeSubs.Count): $($sub.Name) ══" -ForegroundColor Cyan
+            Set-AzContext -SubscriptionId $sub.Id | Out-Null
+            $script:AuditContext.SubscriptionId   = $sub.Id
+            $script:AuditContext.SubscriptionName = $sub.Name
+
+            Invoke-SecurityChecks       -SubscriptionId $sub.Id -SubscriptionName $sub.Name
+            Invoke-CostChecks
+            Invoke-InfrastructureChecks
+            Invoke-ComplianceChecks     -RequiredTags $reqTags
+            Invoke-AdvisorChecks        -SkipAdvisor:$SkipAdvisor
+        }
+        $script:AuditContext.SubscriptionId = ""
         $sw.Stop()
 
         $nativeRaw = Join-Path (Join-Path $runFolder "raw") "native"
         New-Item -ItemType Directory -Force -Path $nativeRaw | Out-Null
-        $nativeFindings = @(Get-AuditFindings)
+        $nativeFindings = (Get-AuditFindings).ToArray()
         ConvertTo-Json -InputObject $nativeFindings -Depth 4 | Set-Content -Path (Join-Path $nativeRaw "findings.json") -Encoding utf8
         Save-ToolRunState -RawFolder $nativeRaw -State @{ Status = "Succeeded"; DurationSeconds = $sw.Elapsed.TotalSeconds; Version = $ScriptVersion }
-        Complete-ToolImport -Tool "Native" -RawFolder $nativeRaw -FindingCount $nativeFindings.Count -Scope "Subscription: $subName" -Version $ScriptVersion
+        Complete-ToolImport -Tool "Native" -RawFolder $nativeRaw -FindingCount $nativeFindings.Count -Scope (Get-ScopeLabel $scopeSubs) -Version $ScriptVersion
     }
 
     # ── External tools ───────────────────────────────────────
     $externalTools = @($selectedTools | Where-Object { $_ -ne "Native" })
     if ($externalTools.Count -gt 0) {
-        Invoke-AuditTools -Tools $externalTools -RunFolder $runFolder -TenantId $tenant -SubscriptionId $subId `
+        Invoke-AuditTools -Tools $externalTools -RunFolder $runFolder -TenantId $tenant -SubscriptionIds $scopeSubs.Id `
             -ManagementGroupId $ManagementGroupId -ToolsPath $ToolsPath -InstallMissing:$InstallMissing
         # Tool runs may have switched the Az context; restore it for anything that follows.
-        Set-AzContext -SubscriptionId $subId -ErrorAction SilentlyContinue | Out-Null
+        Set-AzContext -SubscriptionId $scopeSubs[0].Id -ErrorAction SilentlyContinue | Out-Null
     }
 }
 
@@ -309,8 +352,7 @@ $toolRuns = Get-ToolRuns
 $reportParams = @{
     Findings         = $findings
     ToolRuns         = $toolRuns
-    SubscriptionName = $subName
-    SubscriptionId   = $subId
+    Subscriptions    = $scopeSubs
     TenantId         = $tenant
     CsvPath          = $csvPath
     HtmlPath         = $htmlPath

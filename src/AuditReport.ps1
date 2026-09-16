@@ -9,8 +9,7 @@ function New-AuditReport {
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[PSCustomObject]]$Findings,
         [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[PSCustomObject]]$ToolRuns,
-        [Parameter(Mandatory)][string]$SubscriptionName,
-        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][object[]]$Subscriptions,     # @{ Id; Name }
         [Parameter(Mandatory)][string]$TenantId,
         [Parameter(Mandatory)][string]$CsvPath,
         [Parameter(Mandatory)][string]$HtmlPath,
@@ -23,23 +22,33 @@ function New-AuditReport {
 
     Write-Section "GENERATING REPORTS"
 
+    $subs = @($Subscriptions | Where-Object { $_ })
+    $subNames = @{}
+    foreach ($sub in $subs) { $subNames["$($sub.Id)".ToLower()] = "$($sub.Name)" }
+    $scopeTitle = if ($subs.Count -eq 1) { "$($subs[0].Name)" } else { "$($subs.Count) subscriptions" }
+
+    # Resolve the subscription name for every finding (tenant-level findings keep "-")
+    $subNameProp = { $id = "$($_.SubscriptionId)".ToLower(); if ($subNames.ContainsKey($id)) { $subNames[$id] } elseif ($id -and $id -ne '-') { $id } else { "Tenant" } }
+
     $sevOrder = @{ "Critical" = 0; "High" = 1; "Medium" = 2; "Low" = 3; "Info" = 4 }
     $sorted   = @($Findings | Sort-Object { $sevOrder[$_.Severity] }, Category, Title, Resource)
 
     # ── CSV ──────────────────────────────────────────────────
     Write-Step "Saving CSV..."
     $sorted | Select-Object Severity, Category, Source, CheckId, Title, Resource, ResourceType, ResourceId,
-                            SubscriptionId, Finding, Recommendation, Reference, Frameworks, Timestamp |
+                            @{ Name = "SubscriptionName"; Expression = $subNameProp }, SubscriptionId,
+                            Finding, Recommendation, Reference, Frameworks, Timestamp |
         Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
     Write-Step "  $CsvPath" "Gray"
 
     # ── Data model ───────────────────────────────────────────
     $data = [ordered]@{
         meta = [ordered]@{
-            customerName     = $(if ($CustomerName) { $CustomerName } else { $SubscriptionName })
+            customerName     = $(if ($CustomerName) { $CustomerName } else { $scopeTitle })
             preparedBy       = $PreparedBy
-            subscriptionName = $SubscriptionName
-            subscriptionId   = $SubscriptionId
+            subscriptionName = $scopeTitle
+            subscriptionId   = $(if ($subs.Count -eq 1) { "$($subs[0].Id)" } else { "" })
+            subscriptions    = @($subs | ForEach-Object { [ordered]@{ id = "$($_.Id)"; name = "$($_.Name)" } })
             tenantId         = $TenantId
             generated        = $GeneratedAt
             scriptVersion    = $ScriptVersion
@@ -47,7 +56,8 @@ function New-AuditReport {
         }
         tools    = @($ToolRuns)
         findings = @($sorted | Select-Object Source, Category, Severity, CheckId, Title, Resource, ResourceType, ResourceId,
-                                             SubscriptionId, Finding, Recommendation, Reference, Frameworks)
+                                             SubscriptionId, @{ Name = "SubscriptionName"; Expression = $subNameProp },
+                                             Finding, Recommendation, Reference, Frameworks)
     }
 
     $json = $data | ConvertTo-Json -Depth 8 -Compress -EscapeHandling EscapeHtml
@@ -63,7 +73,7 @@ function New-AuditReport {
     if (-not (Test-Path $templatePath)) { throw "Report template not found: $templatePath" }
     $template = Get-Content -LiteralPath $templatePath -Raw -Encoding utf8
 
-    $title = "Azure assessment - $(if ($CustomerName) { $CustomerName } else { $SubscriptionName })"
+    $title = "Azure assessment - $(if ($CustomerName) { $CustomerName } else { $scopeTitle })"
     $titleEncoded = [System.Net.WebUtility]::HtmlEncode($title)
 
     # String.Replace (not -replace) so '$' in the data is never treated as a regex substitution.

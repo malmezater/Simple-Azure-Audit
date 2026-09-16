@@ -18,7 +18,7 @@ function Invoke-WARAScan {
         [Parameter(Mandatory)][string]$RunFolder,
         [Parameter(Mandatory)][string]$LogDirectory,
         [Parameter(Mandatory)][string]$TenantId,
-        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][string[]]$SubscriptionIds,
         [switch]$InstallMissing
     )
 
@@ -30,7 +30,7 @@ function Invoke-WARAScan {
 
     $script = @"
 Import-Module WARA -ErrorAction Stop
-Start-WARACollector -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionIds @($(ConvertTo-PSLiteral "/subscriptions/$SubscriptionId"))
+Start-WARACollector -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionIds $(ConvertTo-PSArrayLiteral (@($SubscriptionIds) | ForEach-Object { "/subscriptions/$_" }))
 "@
 
     Write-Step "  Running Start-WARACollector..." "Gray"

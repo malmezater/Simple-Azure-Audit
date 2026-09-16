@@ -266,6 +266,21 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       </div>
     </div>
 
+    <div class="card card-pad" id="sub-card" hidden style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <h2>By subscription</h2>
+          <p class="sub">Issues and findings per subscription. Tenant-level checks (Entra ID) are listed separately. Select a row to filter the findings.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="sub-head"></thead>
+          <tbody id="sub-rows"></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card card-pad">
       <div class="card-head">
         <div>
@@ -290,6 +305,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       <div class="sev-filter" id="f-sev" role="group" aria-label="Severity"></div>
       <select id="f-cat" aria-label="Area"></select>
       <select id="f-src" aria-label="Source"></select>
+      <select id="f-sub" aria-label="Subscription" hidden></select>
       <div class="seg-toggle" role="group" aria-label="View">
         <button type="button" data-view="grouped" aria-pressed="true">By issue</button>
         <button type="button" data-view="flat" aria-pressed="false">All rows</button>
@@ -360,12 +376,14 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       i: i,
       source: f.Source || "Native", category: f.Category || "Other", severity: f.Severity || "Info",
       checkId: f.CheckId || "", title: f.Title || f.Finding || "", resource: f.Resource || "",
-      resourceType: f.ResourceType || "", resourceId: f.ResourceId || "", subscriptionId: f.SubscriptionId || "",
+      resourceType: f.ResourceType || "", resourceId: f.ResourceId || "", subscriptionId: f.SubscriptionId || "", subscriptionName: f.SubscriptionName || "",
       finding: f.Finding || "", recommendation: f.Recommendation || "", reference: f.Reference || "",
       frameworks: f.Frameworks || ""
     };
   });
   var TOOLS = DATA.tools || [];
+  var SUBSCRIPTIONS = META.subscriptions || [];
+  var MULTI_SUB = SUBSCRIPTIONS.length > 1;
 
   var SEVERITIES = ["Critical", "High", "Medium", "Low", "Info"];
   var SEV_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
@@ -453,12 +471,15 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
     document.getElementById("report-title").textContent = META.customerName || META.subscriptionName || "Azure environment";
     if (META.preparedBy) document.getElementById("eyebrow").textContent = "Azure environment assessment · " + META.preparedBy;
     var meta = document.getElementById("report-meta");
-    [
+    (MULTI_SUB ? [
+      ["Subscriptions", SUBSCRIPTIONS.length <= 4 ? SUBSCRIPTIONS.map(function (s) { return s.name; }).join(", ") : SUBSCRIPTIONS.length + " (see By subscription)"]
+    ] : [
       ["Subscription", META.subscriptionName],
-      ["Subscription ID", META.subscriptionId, true],
+      ["Subscription ID", META.subscriptionId, true]
+    ]).concat([
       ["Tenant", META.tenantName || META.tenantId, !META.tenantName],
       ["Generated", META.generated]
-    ].forEach(function (m) {
+    ]).forEach(function (m) {
       if (!m[1]) return;
       meta.appendChild(el("span", {}, [m[0] + ": ", m[2] ? el("code", { text: m[1] }) : m[1]]));
     });
@@ -512,7 +533,39 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
 
     renderCategoryBars("issues");
     renderToolSummary();
+    renderSubscriptionTable();
     renderTopIssues();
+  }
+
+  function renderSubscriptionTable() {
+    if (!MULTI_SUB) return;
+    document.getElementById("sub-card").hidden = false;
+    var head = clear(document.getElementById("sub-head"));
+    var hr = el("tr", {}, [el("th", { text: "Subscription" })]);
+    SEVERITIES.forEach(function (s) { hr.appendChild(el("th", { class: "num" }, [el("span", { class: "sev" }, [el("span", { class: "swatch sw-" + s }), s])])); });
+    hr.appendChild(el("th", { class: "num", text: "Issues" }));
+    hr.appendChild(el("th", { class: "num", text: "Findings" }));
+    head.appendChild(hr);
+
+    var order = SUBSCRIPTIONS.map(function (s) { return s.name; });
+    var names = Object.keys(FINDINGS.reduce(function (m, f) { m[f.subscriptionName || "Tenant"] = 1; return m; }, {}));
+    names.forEach(function (n) { if (order.indexOf(n) === -1) order.push(n); });
+
+    var body = clear(document.getElementById("sub-rows"));
+    order.forEach(function (name) {
+      var rows = FINDINGS.filter(function (f) { return (f.subscriptionName || "Tenant") === name; });
+      var issues = groupIssues(rows);
+      var tr = el("tr", { class: "clickable", tabindex: "0",
+        onclick: function () { openFindings({ sub: name }); },
+        onkeydown: function (e) { if (e.key === "Enter") openFindings({ sub: name }); } }, [el("td", { style: "font-weight:600", text: name })]);
+      SEVERITIES.forEach(function (s) {
+        var n = issues.filter(function (g) { return g.severity === s; }).length;
+        tr.appendChild(el("td", { class: "num" + (n ? "" : " muted"), text: n ? fmt(n) : "–" }));
+      });
+      tr.appendChild(el("td", { class: "num", text: fmt(issues.length) }));
+      tr.appendChild(el("td", { class: "num", text: fmt(rows.length) }));
+      body.appendChild(tr);
+    });
   }
 
   function renderCategoryBars(measure) {
@@ -607,7 +660,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   }
 
   // ── Findings tab ────────────────────────────────────────
-  var state = { q: "", sev: [], cat: "", src: "", view: "grouped", limit: 60, openIssue: null };
+  var state = { q: "", sev: [], cat: "", src: "", sub: "", view: "grouped", limit: 60, openIssue: null };
 
   function uniqueSorted(key) {
     var m = {};
@@ -635,6 +688,15 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
     uniqueSorted("source").forEach(function (c) { src.appendChild(el("option", { value: c[0], text: sourceLabel(c[0]) + " (" + fmt(c[1]) + ")" })); });
     src.addEventListener("change", function () { state.src = src.value; state.limit = 60; state.openIssue = null; renderFindings(); });
 
+    if (MULTI_SUB) {
+      var sub = document.getElementById("f-sub");
+      sub.hidden = false;
+      sub.appendChild(el("option", { value: "", text: "All subscriptions" }));
+      var counts = FINDINGS.reduce(function (m, f) { var k = f.subscriptionName || "Tenant"; m[k] = (m[k] || 0) + 1; return m; }, {});
+      Object.keys(counts).sort().forEach(function (k) { sub.appendChild(el("option", { value: k, text: k + " (" + fmt(counts[k]) + ")" })); });
+      sub.addEventListener("change", function () { state.sub = sub.value; state.limit = 60; state.openIssue = null; renderFindings(); });
+    }
+
     var search = document.getElementById("f-search"), timer;
     search.addEventListener("input", function () {
       clearTimeout(timer);
@@ -647,12 +709,13 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   }
 
   function setFilters(f) {
-    state.q = f.q || ""; state.sev = f.sev ? f.sev.slice() : []; state.cat = f.cat || ""; state.src = f.src || "";
+    state.q = f.q || ""; state.sev = f.sev ? f.sev.slice() : []; state.cat = f.cat || ""; state.src = f.src || ""; state.sub = f.sub || "";
     state.openIssue = f.issue || null; state.limit = 60;
     if (f.issue) state.view = "grouped";
     document.getElementById("f-search").value = f.q || "";
     document.getElementById("f-cat").value = state.cat;
     document.getElementById("f-src").value = state.src;
+    document.getElementById("f-sub").value = state.sub;
     renderFindings();
   }
 
@@ -662,9 +725,10 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       if (state.sev.length && state.sev.indexOf(f.severity) === -1) return false;
       if (state.cat && f.category !== state.cat) return false;
       if (state.src && f.source !== state.src) return false;
+      if (state.sub && (f.subscriptionName || "Tenant") !== state.sub) return false;
       if (q) {
         var hay = (f.title + " " + f.resource + " " + f.resourceId + " " + f.resourceType + " " + f.finding + " " +
-          f.recommendation + " " + f.checkId + " " + f.frameworks).toLowerCase();
+          f.recommendation + " " + f.checkId + " " + f.frameworks + " " + f.subscriptionName).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
@@ -704,7 +768,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
         tbody.appendChild(el("tr", {}, [
           el("td", {}, [sevPill(f.severity)]),
           el("td", {}, [el("div", { style: "font-weight:600", text: f.title }), el("div", { class: "muted clamp", text: f.finding !== f.title ? f.finding : "" })]),
-          el("td", {}, [el("div", { text: f.resource }), el("div", { class: "muted", style: "font-size:12px", text: f.resourceType })]),
+          el("td", {}, [el("div", { text: f.resource }), el("div", { class: "muted", style: "font-size:12px", text: f.resourceType + (MULTI_SUB && f.subscriptionName ? " · " + f.subscriptionName : "") })]),
           el("td", { text: f.category }),
           el("td", { text: sourceLabel(f.source) })
         ]));
@@ -748,7 +812,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       items.slice(0, cap).forEach(function (f) {
         tbody.appendChild(el("tr", {}, [
           el("td", {}, [el("div", { text: f.resource || "—" }), f.resourceId ? el("div", { class: "mono muted", text: f.resourceId }) : null]),
-          el("td", { class: "muted", text: f.resourceType }),
+          el("td", { class: "muted" }, [el("div", { text: f.resourceType }), MULTI_SUB && f.subscriptionName ? el("div", { style: "font-size:12px", text: f.subscriptionName }) : null]),
           el("td", { text: f.finding !== g.title ? f.finding : "" }),
           el("td", {}, [sevPill(f.severity)])
         ]));
@@ -853,8 +917,8 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   function openFindings(f) { setFilters(f); selectTab("findings"); window.scrollTo(0, 0); }
 
   function exportCsv() {
-    var cols = ["Severity", "Category", "Source", "CheckId", "Title", "Resource", "ResourceType", "ResourceId", "SubscriptionId", "Finding", "Recommendation", "Reference", "Frameworks"];
-    var keys = ["severity", "category", "source", "checkId", "title", "resource", "resourceType", "resourceId", "subscriptionId", "finding", "recommendation", "reference", "frameworks"];
+    var cols = ["Severity", "Category", "Source", "CheckId", "Title", "Resource", "ResourceType", "ResourceId", "SubscriptionName", "SubscriptionId", "Finding", "Recommendation", "Reference", "Frameworks"];
+    var keys = ["severity", "category", "source", "checkId", "title", "resource", "resourceType", "resourceId", "subscriptionName", "subscriptionId", "finding", "recommendation", "reference", "frameworks"];
     var rows = filtered();
     if (state.openIssue) rows = rows.filter(function (f) { return f.source + "::" + (f.checkId || f.title) === state.openIssue; });
     var esc = function (v) { v = String(v == null ? "" : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };

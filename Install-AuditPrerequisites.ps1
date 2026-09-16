@@ -11,7 +11,8 @@
 
       1. PowerShell modules  (Az, Microsoft.Graph.Authentication, Pester, Maester, PSRule.Rules.Azure,
                               WARA, AzureResourceInventory, ImportExcel, AzAPICall)
-      2. Prowler             (Python venv in %ProgramData%\SimpleAzureAudit\prowler, added to PATH)
+      2. Prowler             (Python venv in %ProgramData%\SimpleAzureAudit\prowler, added to PATH;
+                              enables Windows long path support, which Prowler's dependencies need)
       3. AzGovViz script     (downloaded to <ToolsPath>\Azure-Governance-Visualizer)
       4. Maester tests       (<ToolsPath>\maester-tests)
 
@@ -128,6 +129,15 @@ else {
             if ($ver -in "3.10", "3.11", "3.12", "3.13") { $python = @("python") }
         }
         if (-not $python) { throw "Python 3.10-3.13 not found. Install it first (winget: Python.Python.3.12)." }
+
+        # Prowler's dependencies (msgraph-sdk) contain paths longer than 260 characters, so pip
+        # fails unless Windows long path support is on. It applies to processes started afterwards.
+        $fsKey = "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem"
+        if ((Get-ItemProperty -Path $fsKey -Name LongPathsEnabled -ErrorAction SilentlyContinue).LongPathsEnabled -ne 1) {
+            if (-not $isAdmin) { throw "Windows long path support is disabled. Run this script elevated once, or set LongPathsEnabled=1 under $fsKey." }
+            Set-ItemProperty -Path $fsKey -Name LongPathsEnabled -Value 1 -Type DWord
+            Write-Host "  Enabled Windows long path support (LongPathsEnabled = 1)." -ForegroundColor Yellow
+        }
 
         $venvPython = Join-Path $ProwlerPath "Scripts\python.exe"
         if (-not (Test-Path $venvPython)) {

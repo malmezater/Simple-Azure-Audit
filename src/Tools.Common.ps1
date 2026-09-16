@@ -26,6 +26,12 @@ function ConvertTo-PSLiteral {
     return "'" + ($Value -replace "'", "''") + "'"
 }
 
+function ConvertTo-PSArrayLiteral {
+    # Returns @('a','b') for embedding a string array in generated scripts.
+    param([AllowEmptyCollection()][string[]]$Values)
+    return "@(" + ((@($Values) | ForEach-Object { ConvertTo-PSLiteral $_ }) -join ", ") + ")"
+}
+
 function Get-PwshPath {
     $p = (Get-Process -Id $PID).Path
     if ($p -and (Split-Path $p -Leaf) -match '^pwsh') { return $p }
@@ -141,7 +147,7 @@ function Invoke-AuditTools {
         [Parameter(Mandatory)][string[]]$Tools,
         [Parameter(Mandatory)][string]$RunFolder,
         [string]$TenantId,
-        [string]$SubscriptionId,
+        [string[]]$SubscriptionIds,
         [string]$ManagementGroupId,
         [string]$ToolsPath,
         [switch]$ImportOnly,
@@ -161,7 +167,7 @@ function Invoke-AuditTools {
         try {
             switch ($tool) {
                 "Prowler" {
-                    if (-not $ImportOnly) { Invoke-ProwlerScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId }
+                    if (-not $ImportOnly) { Invoke-ProwlerScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionIds $SubscriptionIds }
                     Import-ProwlerResults @common
                 }
                 "Maester" {
@@ -169,19 +175,19 @@ function Invoke-AuditTools {
                     Import-MaesterResults @common
                 }
                 "PSRule" {
-                    if (-not $ImportOnly) { Invoke-PSRuleScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId -InstallMissing:$InstallMissing }
-                    Import-PSRuleResults @common -SubscriptionId $SubscriptionId
+                    if (-not $ImportOnly) { Invoke-PSRuleScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionIds $SubscriptionIds -InstallMissing:$InstallMissing }
+                    Import-PSRuleResults @common -SubscriptionIds $SubscriptionIds
                 }
                 "AzGovViz" {
-                    if (-not $ImportOnly) { Invoke-AzGovVizScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId -ManagementGroupId $ManagementGroupId -ToolsPath $ToolsPath -InstallMissing:$InstallMissing }
-                    Import-AzGovVizResults @common -SubscriptionId $SubscriptionId
+                    if (-not $ImportOnly) { Invoke-AzGovVizScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionIds $SubscriptionIds -ManagementGroupId $ManagementGroupId -ToolsPath $ToolsPath -InstallMissing:$InstallMissing }
+                    Import-AzGovVizResults @common -SubscriptionIds $SubscriptionIds
                 }
                 "WARA" {
-                    if (-not $ImportOnly) { Invoke-WARAScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId -InstallMissing:$InstallMissing }
+                    if (-not $ImportOnly) { Invoke-WARAScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionIds $SubscriptionIds -InstallMissing:$InstallMissing }
                     Import-WARAResults @common
                 }
                 "ARI" {
-                    if (-not $ImportOnly) { Invoke-ARIScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId -InstallMissing:$InstallMissing }
+                    if (-not $ImportOnly) { Invoke-ARIScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionIds $SubscriptionIds -InstallMissing:$InstallMissing }
                     Import-ARIResults @common
                 }
             }

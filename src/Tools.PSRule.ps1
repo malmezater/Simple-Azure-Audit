@@ -16,7 +16,7 @@ function Invoke-PSRuleScan {
         [Parameter(Mandatory)][string]$RunFolder,
         [Parameter(Mandatory)][string]$LogDirectory,
         [Parameter(Mandatory)][string]$TenantId,
-        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][string[]]$SubscriptionIds,
         [switch]$InstallMissing
     )
 
@@ -31,10 +31,10 @@ function Invoke-PSRuleScan {
 Import-Module PSRule.Rules.Azure -ErrorAction Stop
 `$export = Join-Path $(ConvertTo-PSLiteral $RawFolder) 'export'
 New-Item -ItemType Directory -Force -Path `$export | Out-Null
-Set-AzContext -Subscription $(ConvertTo-PSLiteral $SubscriptionId) -Tenant $(ConvertTo-PSLiteral $TenantId) | Out-Null
+Set-AzContext -Subscription $(ConvertTo-PSLiteral $SubscriptionIds[0]) -Tenant $(ConvertTo-PSLiteral $TenantId) | Out-Null
 
 Write-Host 'Exporting resource configuration (Export-AzRuleData)...'
-Export-AzRuleData -Subscription $(ConvertTo-PSLiteral $SubscriptionId) -OutputPath `$export | Out-Null
+Export-AzRuleData -Subscription $(ConvertTo-PSArrayLiteral $SubscriptionIds) -OutputPath `$export | Out-Null
 
 Write-Host 'Evaluating rules (Invoke-PSRule)...'
 `$results = @(Invoke-PSRule -InputPath `$export -Module 'PSRule.Rules.Azure' -Outcome Fail, Pass -WarningAction SilentlyContinue)
@@ -80,7 +80,7 @@ function Import-PSRuleResults {
     param(
         [Parameter(Mandatory)][string]$RawFolder,
         [Parameter(Mandatory)][string]$RunFolder,
-        [string]$SubscriptionId
+        [string[]]$SubscriptionIds
     )
 
     $json = Get-LatestFile -Path $RawFolder -Filter "psrule-results.json"
@@ -135,5 +135,5 @@ function Import-PSRuleResults {
     $reports = @(New-ReportLink -Label "PSRule results (JSON)" -File $json -RunFolder $RunFolder) | Where-Object { $_ }
     Write-Step "  $failed failed / $passed passed rule evaluations imported." "Gray"
     Complete-ToolImport -Tool "PSRule" -RawFolder $RawFolder -FindingCount $count `
-        -Passed $passed -Failed $failed -Total ($passed + $failed) -Scope "Subscription: $SubscriptionId" -Reports $reports
+        -Passed $passed -Failed $failed -Total ($passed + $failed) -Scope "Subscriptions: $(@($SubscriptionIds).Count)" -Reports $reports
 }

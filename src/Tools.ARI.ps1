@@ -13,7 +13,7 @@ function Invoke-ARIScan {
         [Parameter(Mandatory)][string]$RunFolder,
         [Parameter(Mandatory)][string]$LogDirectory,
         [Parameter(Mandatory)][string]$TenantId,
-        [Parameter(Mandatory)][string]$SubscriptionId,
+        [Parameter(Mandatory)][string[]]$SubscriptionIds,
         [switch]$InstallMissing
     )
 
@@ -26,7 +26,7 @@ function Invoke-ARIScan {
     # Advisor and Defender data are already covered by the other checks, so ARI stays an inventory.
     $script = @"
 Import-Module AzureResourceInventory -ErrorAction Stop
-Invoke-ARI -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionID $(ConvertTo-PSLiteral $SubscriptionId) ``
+Invoke-ARI -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionID $(ConvertTo-PSArrayLiteral $SubscriptionIds) ``
     -ReportDir $(ConvertTo-PSLiteral $RawFolder) -ReportName 'ARI' -IncludeTags -SkipAdvisory -NoAutoUpdate
 "@
 

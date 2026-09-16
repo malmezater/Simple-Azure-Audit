@@ -12,9 +12,10 @@ $script:ToolRuns = [System.Collections.Generic.List[PSCustomObject]]::new()
 
 # Subscription/tenant the current run is scoped to. Set by the main script.
 $script:AuditContext = [PSCustomObject]@{
-    SubscriptionId   = ""
+    SubscriptionId   = ""     # subscription currently being scanned by the built-in checks
     SubscriptionName = ""
     TenantId         = ""
+    Subscriptions    = @()    # every subscription in scope: @{ Id; Name }
 }
 
 $script:AuditCategories = @(
@@ -78,6 +79,39 @@ function Get-SubscriptionIdFromResourceId {
     param([string]$ResourceId)
     if ($ResourceId -match '/subscriptions/([0-9a-fA-F-]{36})') { return $Matches[1].ToLower() }
     return ""
+}
+
+function Resolve-SubscriptionSelection {
+    <#
+      Parses an interactive selection such as "2", "1-3", "1,3,5", "1-3,6" or "all"
+      into 0-based indexes. Returns $null when the input is invalid.
+    #>
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Selection, [Parameter(Mandatory)][int]$Count)
+    $text = $Selection.Trim().ToLowerInvariant()
+    if ($text -in @("all", "a", "*")) { return @(0..($Count - 1)) }
+    if (-not $text) { return $null }
+
+    $indexes = [System.Collections.Generic.List[int]]::new()
+    foreach ($part in ($text -split '[,;\s]+' | Where-Object { $_ })) {
+        if ($part -match '^(\d+)-(\d+)$') {
+            $from = [int]$Matches[1]; $to = [int]$Matches[2]
+            if ($from -gt $to) { $from, $to = $to, $from }
+        }
+        elseif ($part -match '^\d+$') {
+            $from = [int]$part; $to = $from
+        }
+        else { return $null }
+        if ($from -lt 1 -or $to -gt $Count) { return $null }
+        foreach ($n in $from..$to) { if (-not $indexes.Contains($n - 1)) { $indexes.Add($n - 1) } }
+    }
+    return @($indexes)
+}
+
+function Get-ScopeLabel {
+    param([object[]]$Subscriptions)
+    $subs = @($Subscriptions)
+    if ($subs.Count -eq 1) { return "Subscription: $($subs[0].Name)" }
+    return "$($subs.Count) subscriptions"
 }
 
 function ConvertTo-PlainText {
