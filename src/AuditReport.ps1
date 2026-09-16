@@ -1,273 +1,73 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # AuditReport.ps1
-# Generates the CSV and HTML report from the collected findings.
+# Generates the CSV, the merged JSON data file and the interactive HTML report.
+# The HTML layout lives in src\report-template.html; the findings are embedded
+# as JSON so the report is a single self-contained file.
 # ─────────────────────────────────────────────────────────────
 
 function New-AuditReport {
     param(
-        [Parameter(Mandatory)][System.Collections.Generic.List[PSCustomObject]]$Findings,
+        [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[PSCustomObject]]$Findings,
+        [Parameter(Mandatory)][AllowEmptyCollection()][System.Collections.Generic.List[PSCustomObject]]$ToolRuns,
         [Parameter(Mandatory)][string]$SubscriptionName,
         [Parameter(Mandatory)][string]$SubscriptionId,
         [Parameter(Mandatory)][string]$TenantId,
         [Parameter(Mandatory)][string]$CsvPath,
-        [Parameter(Mandatory)][string]$HtmlPath
+        [Parameter(Mandatory)][string]$HtmlPath,
+        [string]$DataPath,
+        [string]$CustomerName,
+        [string]$PreparedBy,
+        [string]$ScriptVersion,
+        [string]$GeneratedAt = (Get-Date -Format "yyyy-MM-dd HH:mm")
     )
 
     Write-Section "GENERATING REPORTS"
 
+    $sevOrder = @{ "Critical" = 0; "High" = 1; "Medium" = 2; "Low" = 3; "Info" = 4 }
+    $sorted   = @($Findings | Sort-Object { $sevOrder[$_.Severity] }, Category, Title, Resource)
+
     # ── CSV ──────────────────────────────────────────────────
     Write-Step "Saving CSV..."
-    $Findings | Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+    $sorted | Select-Object Severity, Category, Source, CheckId, Title, Resource, ResourceType, ResourceId,
+                            SubscriptionId, Finding, Recommendation, Reference, Frameworks, Timestamp |
+        Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
     Write-Step "  $CsvPath" "Gray"
+
+    # ── Data model ───────────────────────────────────────────
+    $data = [ordered]@{
+        meta = [ordered]@{
+            customerName     = $(if ($CustomerName) { $CustomerName } else { $SubscriptionName })
+            preparedBy       = $PreparedBy
+            subscriptionName = $SubscriptionName
+            subscriptionId   = $SubscriptionId
+            tenantId         = $TenantId
+            generated        = $GeneratedAt
+            scriptVersion    = $ScriptVersion
+            fileBaseName     = [System.IO.Path]::GetFileNameWithoutExtension($HtmlPath)
+        }
+        tools    = @($ToolRuns)
+        findings = @($sorted | Select-Object Source, Category, Severity, CheckId, Title, Resource, ResourceType, ResourceId,
+                                             SubscriptionId, Finding, Recommendation, Reference, Frameworks)
+    }
+
+    $json = $data | ConvertTo-Json -Depth 8 -Compress -EscapeHandling EscapeHtml
+    if ($DataPath) {
+        Write-Step "Saving merged data (JSON)..."
+        $data | ConvertTo-Json -Depth 8 | Set-Content -Path $DataPath -Encoding utf8
+        Write-Step "  $DataPath" "Gray"
+    }
 
     # ── HTML ─────────────────────────────────────────────────
     Write-Step "Building HTML report..."
+    $templatePath = Join-Path $PSScriptRoot "report-template.html"
+    if (-not (Test-Path $templatePath)) { throw "Report template not found: $templatePath" }
+    $template = Get-Content -LiteralPath $templatePath -Raw -Encoding utf8
 
-    $sevOrder = @{ "Critical"=0; "High"=1; "Medium"=2; "Low"=3; "Info"=4 }
-    $sorted   = $Findings | Sort-Object { $sevOrder[$_.Severity] }
+    $title = "Azure assessment - $(if ($CustomerName) { $CustomerName } else { $SubscriptionName })"
+    $titleEncoded = [System.Net.WebUtility]::HtmlEncode($title)
 
-    $sevCount = @{
-        Critical = @($Findings | Where-Object { $_.Severity -eq "Critical" }).Count
-        High     = @($Findings | Where-Object { $_.Severity -eq "High" }).Count
-        Medium   = @($Findings | Where-Object { $_.Severity -eq "Medium" }).Count
-        Low      = @($Findings | Where-Object { $_.Severity -eq "Low" }).Count
-        Info     = @($Findings | Where-Object { $_.Severity -eq "Info" }).Count
-    }
-
-    $catStats = $Findings | Group-Object Category | Sort-Object Count -Descending
-
-    $badgeColors = @{
-        "Critical" = "#c0392b"; "High" = "#e67e22"
-        "Medium"   = "#d4ac0d"; "Low"  = "#27ae60"; "Info" = "#2980b9"
-    }
-
-    function Get-Badge($sev) {
-        $c = if ($badgeColors[$sev]) { $badgeColors[$sev] } else { "#95a5a6" }
-        "<span style='background:$c;color:#fff;padding:2px 10px;border-radius:12px;font-size:.76rem;font-weight:700;white-space:nowrap'>$sev</span>"
-    }
-
-    Add-Type -AssemblyName System.Web
-
-    $tableRows = ($sorted | ForEach-Object {
-        $badge = Get-Badge $_.Severity
-        $catAttr = [System.Web.HttpUtility]::HtmlAttributeEncode($_.Category)
-        $sevAttr = [System.Web.HttpUtility]::HtmlAttributeEncode($_.Severity)
-        "<tr data-category='$catAttr' data-severity='$sevAttr'>
-          <td>$($_.Category)</td>
-          <td>$badge</td>
-          <td style='font-size:.82rem;color:#555'>$($_.ResourceType)</td>
-          <td style='font-family:Consolas,monospace;font-size:.8rem;color:#0078d4'>$([System.Web.HttpUtility]::HtmlEncode($_.Resource))</td>
-          <td>$([System.Web.HttpUtility]::HtmlEncode($_.Finding))</td>
-          <td style='font-size:.82rem;color:#555'>$([System.Web.HttpUtility]::HtmlEncode($_.Recommendation))</td>
-        </tr>"
-    }) -join "`n"
-
-    $catRows = ($catStats | ForEach-Object {
-        $catAttr = [System.Web.HttpUtility]::HtmlAttributeEncode($_.Name)
-        "<tr class='cat-row' data-category='$catAttr' onclick='filterCategory(this)' style='cursor:pointer'><td>$($_.Name)</td><td><strong class='cat-count'>$($_.Count)</strong></td></tr>"
-    }) -join "`n"
-
-    # Severity bar width
-    $total = [math]::Max($Findings.Count, 1)
-    function Get-Pct($n) { [math]::Round($n / $total * 100, 1) }
-
-    $html = @"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Azure Audit - $SubscriptionName</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#2c3e50;font-size:14px}
-  a{color:#0078d4}
-  header{background:linear-gradient(135deg,#0078d4 0%,#004e8c 100%);color:#fff;padding:2rem 2.5rem}
-  header h1{font-size:1.7rem;font-weight:700;letter-spacing:-.3px}
-  header p{opacity:.85;margin-top:.4rem;font-size:.9rem}
-  .container{max-width:1400px;margin:2rem auto;padding:0 1.5rem}
-  .grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem}
-  .card{background:#fff;border-radius:10px;padding:1.2rem 1rem;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:4px solid #dee}
-  .card.c-crit{border-color:#c0392b}.card.c-high{border-color:#e67e22}
-  .card.c-med{border-color:#d4ac0d}.card.c-low{border-color:#27ae60}.card.c-info{border-color:#2980b9}
-  .card .num{font-size:2rem;font-weight:800;line-height:1}
-  .card.c-crit .num{color:#c0392b}.card.c-high .num{color:#e67e22}
-  .card.c-med .num{color:#d4ac0d}.card.c-low .num{color:#27ae60}.card.c-info .num{color:#2980b9}
-  .card .lbl{font-size:.78rem;color:#7f8c8d;margin-top:.3rem;text-transform:uppercase;letter-spacing:.5px}
-  .panel{background:#fff;border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.07)}
-  .panel h2{font-size:1rem;font-weight:700;color:#0078d4;border-bottom:2px solid #e8f0fe;padding-bottom:.6rem;margin-bottom:1rem}
-  table{width:100%;border-collapse:collapse}
-  th{background:#f8f9fa;text-align:left;padding:.6rem .8rem;font-size:.82rem;font-weight:700;color:#555;border-bottom:2px solid #ddd}
-  td{padding:.6rem .8rem;border-bottom:1px solid #f2f2f2;vertical-align:top;line-height:1.4}
-  tr:hover td{background:#fafbff}
-  .cat-row:hover td{background:#e8f0fe}
-  .cat-row.active td{background:#0078d4;color:#fff}
-  .cat-row.active td strong{color:#fff}
-  .sev-row{cursor:pointer}
-  .sev-row:hover td{background:#e8f0fe}
-  .sev-row.active td{background:#0078d4;color:#fff}
-  .filter-note{display:none;align-items:center;gap:.6rem;font-size:.82rem;color:#555;margin-bottom:.8rem}
-  .filter-note.show{display:flex}
-  .filter-note .clear-btn{cursor:pointer;background:#0078d4;color:#fff;border:none;border-radius:6px;padding:.25rem .7rem;font-size:.78rem;font-weight:600}
-  .filter-note .clear-btn:hover{background:#005a9e}
-  .bar-wrap{background:#eee;border-radius:6px;height:8px;margin-top:.3rem}
-  .bar{height:8px;border-radius:6px}
-  footer{text-align:center;padding:1.5rem;color:#aaa;font-size:.8rem}
-  @media print{
-    body{background:#fff}
-    header{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .panel{box-shadow:none;border:1px solid #ddd}
-  }
-</style>
-</head>
-<body>
-<header>
-  <h1>Azure Environment Audit</h1>
-  <p>
-    <strong>$SubscriptionName</strong> &nbsp;|&nbsp; $SubscriptionId<br>
-    Tenant: $TenantId &nbsp;|&nbsp; Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm')
-  </p>
-</header>
-
-<div class="container">
-
-  <div class="grid-5">
-    <div class="card c-crit"><div class="num">$($sevCount.Critical)</div><div class="lbl">Critical</div></div>
-    <div class="card c-high"><div class="num">$($sevCount.High)</div><div class="lbl">High</div></div>
-    <div class="card c-med" ><div class="num">$($sevCount.Medium)</div><div class="lbl">Medium</div></div>
-    <div class="card c-low" ><div class="num">$($sevCount.Low)</div><div class="lbl">Low</div></div>
-    <div class="card c-info"><div class="num">$($sevCount.Info)</div><div class="lbl">Info</div></div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;margin-bottom:1.5rem">
-    <div class="panel">
-      <h2>Findings by category</h2>
-      <p style="font-size:.78rem;color:#7f8c8d;margin-bottom:.6rem">Click a category to filter the findings below.</p>
-      <table>
-        <thead><tr><th>Category</th><th>Count</th></tr></thead>
-        <tbody>$catRows</tbody>
-      </table>
-    </div>
-    <div class="panel">
-      <h2>Distribution by severity</h2>
-      <p style="font-size:.78rem;color:#7f8c8d;margin-bottom:.6rem">Click a level to filter the findings below.</p>
-      <table>
-        <thead><tr><th>Level</th><th>Count</th><th style="width:40%">Share</th></tr></thead>
-        <tbody>
-          <tr class="sev-row" data-severity="Critical" onclick="filterSeverity(this)"><td>Critical</td><td class="sev-count">$($sevCount.Critical)</td><td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Critical)%;background:#c0392b"></div></div></td></tr>
-          <tr class="sev-row" data-severity="High" onclick="filterSeverity(this)"><td>High</td>    <td class="sev-count">$($sevCount.High)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.High)%;background:#e67e22"></div></div></td></tr>
-          <tr class="sev-row" data-severity="Medium" onclick="filterSeverity(this)"><td>Medium</td>  <td class="sev-count">$($sevCount.Medium)</td>  <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Medium)%;background:#d4ac0d"></div></div></td></tr>
-          <tr class="sev-row" data-severity="Low" onclick="filterSeverity(this)"><td>Low</td>     <td class="sev-count">$($sevCount.Low)</td>     <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Low)%;background:#27ae60"></div></div></td></tr>
-          <tr class="sev-row" data-severity="Info" onclick="filterSeverity(this)"><td>Info</td>    <td class="sev-count">$($sevCount.Info)</td>    <td><div class="bar-wrap"><div class="bar" style="width:$(Get-Pct $sevCount.Info)%;background:#2980b9"></div></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>All findings ($($Findings.Count) total) - sorted by severity</h2>
-    <div class="filter-note" id="filterNote">
-      <span>Filtered by <strong id="filterLabel"></strong> (<span id="filterCount">0</span> shown)</span>
-      <button class="clear-btn" onclick="clearFilter()">Show all</button>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width:100px">Category</th>
-          <th style="width:90px">Level</th>
-          <th style="width:120px">Resource type</th>
-          <th style="width:200px">Resource</th>
-          <th>Finding</th>
-          <th style="width:250px">Recommendation</th>
-        </tr>
-      </thead>
-      <tbody id="findingsBody">
-        $tableRows
-      </tbody>
-    </table>
-  </div>
-
-</div>
-
-<footer>
-  Azure Audit Script &nbsp;·&nbsp; $(Get-Date -Format 'yyyy-MM-dd') &nbsp;·&nbsp;
-  $($Findings.Count) findings total &nbsp;·&nbsp;
-  <a href="$(Split-Path $CsvPath -Leaf)">Download CSV</a>
-</footer>
-
-<script>
-  var activeCategory = null;
-  var activeSeverity = null;
-
-  function applyFilter() {
-    var rows = document.querySelectorAll('#findingsBody tr');
-    var shown = 0;
-    var catTally = {};
-    var sevTally = {};
-    rows.forEach(function (row) {
-      var cat = row.getAttribute('data-category');
-      var sev = row.getAttribute('data-severity');
-      var catMatch = activeCategory === null || cat === activeCategory;
-      var sevMatch = activeSeverity === null || sev === activeSeverity;
-      if (catMatch && sevMatch) {
-        row.style.display = '';
-        shown++;
-      } else {
-        row.style.display = 'none';
-      }
-      // Category counts reflect the active severity (ignore category selection).
-      if (sevMatch) { catTally[cat] = (catTally[cat] || 0) + 1; }
-      // Severity counts reflect the active category (ignore severity selection).
-      if (catMatch) { sevTally[sev] = (sevTally[sev] || 0) + 1; }
-    });
-
-    document.querySelectorAll('.cat-row').forEach(function (cr) {
-      var c = cr.getAttribute('data-category');
-      cr.classList.toggle('active', activeCategory !== null && c === activeCategory);
-      cr.querySelector('.cat-count').textContent = catTally[c] || 0;
-    });
-    document.querySelectorAll('.sev-row').forEach(function (sr) {
-      var s = sr.getAttribute('data-severity');
-      sr.classList.toggle('active', activeSeverity !== null && s === activeSeverity);
-      sr.querySelector('.sev-count').textContent = sevTally[s] || 0;
-    });
-
-    var note = document.getElementById('filterNote');
-    if (activeCategory === null && activeSeverity === null) {
-      note.classList.remove('show');
-      return;
-    }
-
-    var parts = [];
-    if (activeCategory !== null) { parts.push('category: ' + activeCategory); }
-    if (activeSeverity !== null) { parts.push('level: ' + activeSeverity); }
-    document.getElementById('filterLabel').textContent = parts.join(' + ');
-    document.getElementById('filterCount').textContent = shown;
-    note.classList.add('show');
-  }
-
-  function filterCategory(el) {
-    var category = el.getAttribute('data-category');
-    activeCategory = (activeCategory === category) ? null : category;
-    applyFilter();
-  }
-
-  function filterSeverity(el) {
-    var severity = el.getAttribute('data-severity');
-    activeSeverity = (activeSeverity === severity) ? null : severity;
-    applyFilter();
-  }
-
-  function clearFilter() {
-    activeCategory = null;
-    activeSeverity = null;
-    applyFilter();
-  }
-</script>
-</body>
-</html>
-"@
-
-    $html | Out-File -FilePath $HtmlPath -Encoding UTF8
+    # String.Replace (not -replace) so '$' in the data is never treated as a regex substitution.
+    $html = $template.Replace("__REPORT_TITLE__", $titleEncoded).Replace("__AUDIT_DATA__", $json)
+    Set-Content -Path $HtmlPath -Value $html -Encoding utf8 -NoNewline
     Write-Step "  $HtmlPath" "Gray"
 }

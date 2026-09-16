@@ -1,36 +1,24 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Advisor.ps1
 # Azure Advisor: fetches all active recommendations (requires Az.Advisor).
+# Recommendations are mapped to the matching Well-Architected category.
 # ─────────────────────────────────────────────────────────────
 
 function Get-AdvisorProperty {
-    # Safely reads a (possibly nested) property without tripping Set-StrictMode.
+    # Kept for backwards compatibility - use Get-PropValue in new code.
     param(
         [Parameter(Mandatory)]$InputObject,
         [Parameter(Mandatory)][string[]]$Path
     )
-    $current = $InputObject
-    foreach ($name in $Path) {
-        if ($null -eq $current) { return $null }
-        $prop = $current.PSObject.Properties[$name]
-        if (-not $prop) { return $null }
-        $current = $prop.Value
-    }
-    return $current
+    Get-PropValue -InputObject $InputObject -Path $Path
 }
 
 function Get-AdvisorFirstValue {
-    # Returns the first non-empty value among several candidate property paths.
-    # Each candidate is an array of property names representing a (nested) path.
     param(
         [Parameter(Mandatory)]$InputObject,
         [Parameter(Mandatory)][object[]]$Candidates
     )
-    foreach ($path in $Candidates) {
-        $value = Get-AdvisorProperty -InputObject $InputObject -Path @($path)
-        if ($null -ne $value -and "$value".Trim()) { return "$value".Trim() }
-    }
-    return $null
+    Get-FirstValue -InputObject $InputObject -Candidates $Candidates
 }
 
 function Invoke-AdvisorChecks {
@@ -49,7 +37,7 @@ function Invoke-AdvisorChecks {
 
     # The fetch itself is the part that depends on the Az.Advisor module.
     try {
-        $advisorRecs = Get-AzAdvisorRecommendation -ErrorAction Stop
+        $advisorRecs = @(Get-AzAdvisorRecommendation -ErrorAction Stop)
     } catch {
         Write-Step "  Could not fetch Advisor data. Make sure the Az.Advisor module is installed." "DarkYellow"
         Write-Step "  ($($_.Exception.Message))" "DarkGray"
@@ -60,7 +48,7 @@ function Invoke-AdvisorChecks {
 
     foreach ($rec in $advisorRecs) {
         try {
-            $impact = Get-AdvisorProperty -InputObject $rec -Path @("Impact")
+            $impact = Get-PropValue -InputObject $rec -Path @("Impact")
             $sev = switch ($impact) {
                 "High"   { "High" }
                 "Medium" { "Medium" }
@@ -68,29 +56,56 @@ function Invoke-AdvisorChecks {
                 default  { "Info" }
             }
 
-            $impactedValue = Get-AdvisorProperty -InputObject $rec -Path @("ImpactedValue")
-            $impactedField = Get-AdvisorProperty -InputObject $rec -Path @("ImpactedField")
+            $advisorCategory = Get-PropValue -InputObject $rec -Path @("Category")
+            $category = switch ("$advisorCategory") {
+                "Security"              { "Security" }
+                "HighAvailability"      { "Reliability" }
+                "Cost"                  { "Cost" }
+                "OperationalExcellence" { "Operations" }
+                "Performance"           { "Performance" }
+                default                 { "Advisor" }
+            }
+
+            $impactedValue = Get-PropValue -InputObject $rec -Path @("ImpactedValue")
+            $impactedField = Get-PropValue -InputObject $rec -Path @("ImpactedField")
 
             # The problem/solution text lives under different property names depending
             # on the Az.Advisor version: flattened (ShortDescriptionProblem) in newer
             # builds, nested (ShortDescription.Problem) in older ones.
-            $problem = Get-AdvisorFirstValue -InputObject $rec -Candidates @(
+            $problem = Get-FirstValue -InputObject $rec -Candidates @(
                 @("ShortDescriptionProblem"),
                 @("ShortDescription","Problem"),
                 @("Problem"),
                 @("Description")
             )
-            $solution = Get-AdvisorFirstValue -InputObject $rec -Candidates @(
+            $solution = Get-FirstValue -InputObject $rec -Candidates @(
                 @("ShortDescriptionSolution"),
                 @("ShortDescription","Solution"),
                 @("Solution")
             )
 
-            Add-Finding -Category "Advisor" -Severity $sev `
+            # Resource ID: either a dedicated property or the prefix of the recommendation ID.
+            $resourceId = Get-FirstValue -InputObject $rec -Candidates @(
+                @("ResourceMetadataResourceId"),
+                @("ResourceMetadata","ResourceId")
+            )
+            if (-not $resourceId) {
+                $recId = "$(Get-PropValue -InputObject $rec -Path @('Id'))"
+                if ($recId -match '^(.+?)/providers/Microsoft\.Advisor/recommendations/') { $resourceId = $Matches[1] }
+            }
+
+            $typeId = Get-FirstValue -InputObject $rec -Candidates @(@("RecommendationTypeId"))
+            $learnMore = Get-FirstValue -InputObject $rec -Candidates @(@("LearnMoreLink"))
+
+            Add-Finding -Source "Azure Advisor" -Category $category -Severity $sev `
+                -CheckId $(if ($typeId) { "ADVISOR-$typeId" } else { "" }) `
+                -Title $(if ($problem) { $problem } else { "See Azure Advisor" }) `
                 -Resource $(if ($impactedValue) { $impactedValue } elseif ($impactedField) { $impactedField } else { "N/A" }) `
+                -ResourceId $resourceId `
                 -ResourceType $(if ($impactedField) { $impactedField } else { "Unknown" }) `
                 -Finding $(if ($problem) { $problem } else { "See Azure Advisor" }) `
-                -Recommendation $(if ($solution) { $solution } else { "See the Azure Advisor portal" })
+                -Recommendation $(if ($solution) { $solution } else { "See the Azure Advisor portal" }) `
+                -Reference $learnMore
         } catch {
             Write-Step "  Skipped a recommendation that could not be parsed: $($_.Exception.Message)" "DarkGray"
         }

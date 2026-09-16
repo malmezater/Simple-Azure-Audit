@@ -1,176 +1,210 @@
 # 🔍 Simple Azure Audit
 
-A comprehensive PowerShell script that reviews an Azure subscription from five perspectives - **Security**, **Cost**, **Infrastructure**, **Compliance** and **Azure Advisor** - and generates a clean, color-coded HTML report together with a CSV file for further analysis in Excel.
+A PowerShell script that reviews an Azure subscription and its Entra ID tenant, runs a set of free assessment tools, and merges everything into **one interactive HTML report** plus a CSV for Excel / Power BI.
+
+| Source | What it adds |
+|--------|--------------|
+| **Built-in checks** | NSG exposure, RBAC, classic admins, unused resources, encryption, Key Vault certificates and protection, storage and App Service TLS/HTTPS, tagging, Azure Advisor |
+| **[Prowler](https://github.com/prowler-cloud/prowler)** | CIS, NIST, ISO 27001 and more security checks for Azure and Entra ID |
+| **[Maester](https://maester.dev)** | Entra ID, Conditional Access, EIDSCA and CISA identity tests |
+| **[Azure Governance Visualizer](https://github.com/Azure/Azure-Governance-Visualizer)** | PSRule for Azure (Well-Architected, all pillars), orphaned resources, risky RBAC assignments, Defender for Cloud plans |
+| **[WARA](https://github.com/Azure/Well-Architected-Reliability-Assessment)** | Microsoft's reliability recommendations (APRL) and upcoming service retirements |
+| **[Azure Resource Inventory](https://github.com/microsoft/ARI)** | Excel inventory and draw.io network diagram, linked as an appendix |
+
+All tools are free and run **read-only**.
 
 ---
 
-## ✨ Features
+## ✨ The report
 
-The script performs the following checks:
+Each run creates a folder with a self-contained HTML file that works offline and can be sent to a customer.
 
-### 1. 🔐 Security
-- **NSG rules** - detects dangerous inbound rules that open sensitive ports (RDP `3389`, SSH `22`, SQL `1433`, MySQL `3306`, PostgreSQL `5432`, Telnet `23`, FTP `21`, SMB `445`, WinRM `5985/5986`) to the Internet (`0.0.0.0/0`).
-- **Public IP addresses** - finds unassociated Public IPs that increase the attack surface and cost.
-- **RBAC** - warns when more than 3 Owner roles exist at the subscription scope.
-- **Classic administrators** - flags deprecated legacy roles (CoAdministrator / ServiceAdministrator).
+- **Overview** – number of critical/high issues, severity tiles, *where the risk is* per area, tool coverage with pass rates, and the top 10 priorities.
+- **Findings** – grouped per issue (one check, many resources) or as a flat list. Filter by severity, area, source and free text. Every issue shows recommendation, reference link, compliance mapping and affected resources.
+- **Resources** – the most affected resources, with which tools flagged them.
+- **Tools & method** – status, version, duration and links to each tool's own raw report, plus how severities and areas are normalised.
+- **Export CSV** of the current filter, **Print / PDF**, light and dark theme.
 
-### 2. 💰 Cost & unused resources
-- **Unattached managed disks** - disks that are not attached to any VM but still cost money.
-- **Stopped/deallocated VMs** - machines whose storage is still billed.
-- **Orphaned NICs** - network interfaces with no associated VM.
-- **Empty resource groups** - RGs with no resources at all.
+### Findings vs issues
 
-### 3. 🏗️ Infrastructure health
-- **VM disk encryption** - checks that OS disks are encrypted (Azure Disk Encryption).
-- **Key Vault certificates** - warns about certificates expiring within 90 days (Critical <=14 days, High <=30 days, Medium <=90 days).
-- **Storage soft-delete** - checks that blob soft-delete is enabled.
+A *finding* is one failed check on one resource. An *issue* groups all findings from the same check, so "missing tags" on 300 resources is **one issue with 300 findings**. Issues are prioritised by severity and number of affected resources.
 
-### 4. ✅ Compliance & policy
-- **Storage Accounts** - `Secure transfer required` (HTTPS only), minimum TLS version (>=1.2) and public blob access.
-- **App Services** - HTTPS Only and minimum TLS version.
-- **Key Vault** - Soft Delete and Purge Protection.
-- **Tagging** - checks that required tags exist on all resources.
+### Severity and area normalisation
 
-### 5. 📈 Azure Advisor
-- Fetches all active Azure Advisor recommendations (requires the `Az.Advisor` module).
-- Includes each recommendation's actual problem and solution text in the report, mapped to a severity based on its impact. The property names are resolved across `Az.Advisor` versions (both the newer flattened and older nested shapes).
+| Tool | Severity mapping | Area |
+|------|------------------|------|
+| Built-in checks | as defined in each check | Security, Cost, Infrastructure, Compliance |
+| Azure Advisor | Impact High/Medium/Low | Advisor category → Security, Reliability, Cost, Operations, Performance |
+| Prowler | Critical/High/Medium/Low/Informational | Security (Entra/IAM → Identity, Monitor → Operations, Policy → Governance) |
+| Maester | Test severity (Investigate → Info) | Identity (Azure-tagged tests → Security) |
+| PSRule (via AzGovViz) | Critical → High, Important → Medium, Awareness → Low | Well-Architected pillar |
+| AzGovViz extras | Orphaned resources Low/Medium, Owner on SP High, orphaned assignments Medium | Cost, Identity, Security |
+| WARA | Recommendation impact | Reliability |
 
 ---
 
 ## 📋 Prerequisites
 
-| Requirement | Detail |
-|-------------|--------|
-| **PowerShell** | Version 7.0 or later |
-| **Az modules** | `Az.Accounts`, `Az.Compute`, `Az.Network`, `Az.Storage`, `Az.KeyVault`, `Az.Resources`, `Az.Websites` |
-| **Optional module** | `Az.Advisor` (only required for the Advisor check) |
-| **Permission** | At least **Reader** at the subscription scope. **Security Reader** is recommended for full security checks. |
-
-### Install the required modules
+| Requirement | Needed for |
+|-------------|------------|
+| **PowerShell 7.0+** | Everything |
+| `Az.Accounts`, `Az.Compute`, `Az.Network`, `Az.Storage`, `Az.KeyVault`, `Az.Resources`, `Az.Websites` | Built-in checks |
+| `Az.Advisor` (optional) | Azure Advisor in the built-in checks |
+| Python 3.10–3.13 + `pip install prowler` | Prowler |
+| `Maester`, `Pester` modules | Maester |
+| `WARA` module | WARA |
+| `AzureResourceInventory` module | ARI |
+| AzGovViz script (downloaded by `-InstallMissing`) | AzGovViz |
+| Azure CLI (optional) | Lets Prowler reuse `az login` instead of opening a browser |
 
 ```powershell
-Install-Module Az.Accounts, Az.Compute, Az.Network, Az.Storage, Az.KeyVault, Az.Resources, Az.Websites -Scope CurrentUser
+Install-Module Az.Accounts, Az.Compute, Az.Network, Az.Storage, Az.KeyVault, Az.Resources, Az.Websites, Az.Advisor -Scope CurrentUser
+pip install prowler
 
-# Optional - for the Azure Advisor check
-Install-Module Az.Advisor -Scope CurrentUser
+# Or let the script install the PowerShell modules and download AzGovViz:
+.\Invoke-AzureAudit.ps1 -InstallMissing
 ```
+
+Tools that are missing are shown as **Not installed** in the report and the rest of the run continues.
+
+### Permissions
+
+| Scope | Role | Used by |
+|-------|------|---------|
+| Subscription | **Reader** (Security Reader recommended) | Built-in checks, Prowler, WARA, ARI |
+| Management group (default: tenant root) | **Reader** | AzGovViz |
+| Entra ID | **Global Reader** | Maester, Prowler Entra checks, AzGovViz identity resolution |
+
+Checks that cannot run because of missing permissions produce no findings – a low count is not proof of compliance.
 
 ---
 
 ## 🚀 Usage
 
 ```powershell
-.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-SubscriptionId <string>] [-OutputPath <string>] [-RequiredTags <string>] [-SkipAdvisor] [-OpenReport]
+.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-SubscriptionId <string>] [-OutputPath <string>]
+                        [-Tools <All|Native|Prowler|Maester|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
+                        [-ManagementGroupId <string>] [-ToolsPath <string>] [-InstallMissing]
+                        [-CustomerName <string>] [-PreparedBy <string>] [-RequiredTags <string>]
+                        [-SkipAdvisor] [-OpenReport] [-ImportFrom <string>]
 ```
 
-If you are not already signed in to Azure, the script automatically runs `Connect-AzAccount`. When a `-TenantID` is supplied, the sign-in is scoped to that tenant.
+### Sign-in
 
-### 🔑 Sign-in & subscription selection
-
-- Pass `-TenantID` to sign in to a specific Azure AD tenant.
-- If you pass `-SubscriptionId`, the script runs against that subscription directly.
-- If you omit `-SubscriptionId`, the script enumerates the **enabled** subscriptions in the tenant:
-  - **One subscription** - it is selected automatically.
-  - **Multiple subscriptions** - you are shown a numbered list and prompted to choose which one to audit, every run.
-  - **No subscriptions** - the script stops with a clear error.
-
-### 🗂️ Project structure
-
-The code is split into a thin main script that orchestrates the run and a `src` folder where each check area lives in its own file. This makes the code easier to read, maintain and extend.
-
-```
-Invoke-AzureAudit.ps1            # Main script: parameters, sign-in, run checks, call the report
-src/
-├── AuditCommon.ps1              # Helper functions (Write-Step, Write-Section, Add-Finding) + shared findings collection
-├── Checks.Security.ps1          # Invoke-SecurityChecks       (1. Security)
-├── Checks.Cost.ps1              # Invoke-CostChecks           (2. Cost)
-├── Checks.Infrastructure.ps1    # Invoke-InfrastructureChecks (3. Infrastructure)
-├── Checks.Compliance.ps1        # Invoke-ComplianceChecks     (4. Compliance)
-├── Checks.Advisor.ps1           # Invoke-AdvisorChecks        (5. Azure Advisor)
-└── AuditReport.ps1              # New-AuditReport: generates the CSV + HTML report
-```
-
-The main script dot-sources the files in `src` at startup, so you still run everything via `Invoke-AzureAudit.ps1` just like before. To add a new check, create a function (or a new `Checks.*.ps1` file) that calls `Add-Finding` and invoke it from the main script.
+1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and selects the subscription, prompting when several are available.
+2. PowerShell-based tools (AzGovViz, WARA, ARI) run in a child `pwsh` process and reuse that Az sign-in.
+3. **Maester** signs in to Microsoft Graph interactively (`Connect-Maester`).
+4. **Prowler** reuses `az login` when the Azure CLI is signed in to the same tenant; otherwise it opens a browser sign-in.
 
 ### Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `-TenantID` | `string` | Active context | Azure AD tenant to sign in to and enumerate subscriptions from. |
-| `-SubscriptionId` | `string` | Active context | Subscription ID to run against. Omitted = you are prompted to choose when the tenant has more than one enabled subscription. |
-| `-OutputPath` | `string` | `.` (current directory) | Folder where the HTML report and CSV are saved. Created automatically if it does not exist. |
-| `-RequiredTags` | `string` | `"Environment,Owner,CostCenter"` | Comma-separated list of required tags to check for. |
-| `-SkipAdvisor` | `switch` | Off | Skips the Azure Advisor fetch (faster run). |
-| `-OpenReport` | `switch` | Off | Opens the HTML report automatically in the browser after the run. |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `-TenantID` | Active context | Tenant to sign in to. |
+| `-SubscriptionId` | Prompt | Subscription to audit. |
+| `-OutputPath` | `.` | Where the run folder is created. |
+| `-Tools` | `All` | Which assessments to run. |
+| `-ExcludeTools` | – | Tools to skip, e.g. `-ExcludeTools ARI,AzGovViz`. |
+| `-ManagementGroupId` | Tenant root | Starting point for AzGovViz. The subscription filter is always applied. |
+| `-ToolsPath` | `.\tools` | Downloaded tool content (AzGovViz script, Maester tests). |
+| `-InstallMissing` | Off | Install missing PowerShell modules and download AzGovViz. |
+| `-CustomerName` | Subscription name | Title of the report. |
+| `-PreparedBy` | – | Shown in the report header, e.g. your company name. |
+| `-RequiredTags` | `Environment,Owner,CostCenter` | Tags the tagging check requires. |
+| `-SkipAdvisor` | Off | Skip Azure Advisor in the built-in checks. |
+| `-OpenReport` | Off | Open the report when done. |
+| `-ImportFrom` | – | Rebuild the report from an existing run folder without scanning. |
 
 ### Examples
 
-**Run against a specific subscription and save the report to a given folder:**
+**Full assessment for a customer:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1 -SubscriptionId "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\Temp\AuditReports"
+.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -SubscriptionId "xxxxxxxx-..." `
+    -OutputPath "C:\Temp\AuditReports" -CustomerName "Contoso AB" -PreparedBy "Malmesater Cloud" -OpenReport
 ```
 
-**Sign in to a specific tenant and pick a subscription interactively:**
+**Quick run – built-in checks, Prowler and Maester only:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" -OutputPath "C:\Temp\AuditReports"
+.\Invoke-AzureAudit.ps1 -Tools Native,Prowler,Maester -OpenReport
 ```
 
-**Run with custom required tags, skip Advisor and open the report immediately:**
+**Everything except the slow tools:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1 -RequiredTags "Environment,Owner,Project" -SkipAdvisor -OpenReport
+.\Invoke-AzureAudit.ps1 -ExcludeTools AzGovViz,ARI
 ```
 
-**Run against the active context with default settings:**
+**Rebuild the report after editing the template or rerunning one tool:**
 
 ```powershell
-.\Invoke-AzureAudit.ps1
+.\Invoke-AzureAudit.ps1 -ImportFrom "C:\Temp\AuditReports\AzureAudit_Contoso_Prod_2026-09-16_08-12" -OpenReport
 ```
 
 ---
 
 ## 📊 Output
 
-Each run generates two files in `-OutputPath`, named after the subscription and a timestamp:
+```
+AzureAudit_<Subscription>_<timestamp>/
+├── AzureAudit_<Subscription>_<timestamp>.html   # Interactive report (self-contained)
+├── AzureAudit_<Subscription>_<timestamp>.csv    # All findings, semicolon-separated, UTF-8
+├── audit-data.json                              # Merged, normalised data (findings + tool runs)
+├── run.json                                     # Run metadata used by -ImportFrom
+├── logs/                                        # Transcript per external tool
+└── raw/
+    ├── native/     findings.json
+    ├── prowler/    prowler.ocsf.json, prowler.html, prowler.csv, compliance/
+    ├── maester/    maester.json, maester.html, maester.md
+    ├── azgovviz/   AzGovViz_*.html, *_PSRule.csv, *_RoleAssignments.csv, ...
+    ├── wara/       WARA-File-*.json, recommendations.json
+    └── ari/        *.xlsx, *.xml (draw.io)
+```
 
-| File | Description |
-|------|-------------|
-| `AzureAudit_<Subscription>_<timestamp>.html` | Interactive, color-coded report with summary cards, distribution by severity, findings by category and a complete table sorted by severity. The **Findings by category** list is clickable - select a category to filter the **All findings** table to just that category, then **Show all** to reset. Print-friendly. |
-| `AzureAudit_<Subscription>_<timestamp>.csv` | Semicolon-separated CSV (UTF-8) with all findings for further analysis in Excel. |
-
-### Severity levels
-
-Each finding is classified with one of the following levels:
-
-| Level | Color | Meaning |
-|-------|-------|---------|
-| 🔴 **Critical** | Red | Requires immediate action (e.g. RDP/SSH open to the Internet). |
-| 🟠 **High** | Orange | High risk that should be addressed soon. |
-| 🟡 **Medium** | Yellow | Should be addressed but not urgent. |
-| 🟢 **Low** | Green | Minor improvements / cleanup. |
-| 🔵 **Info** | Blue | Informational findings with no direct risk. |
-
-### Report columns
+### CSV columns
 
 | Column | Content |
 |--------|---------|
-| Category | Security, Cost, Infrastructure, Compliance or Advisor |
 | Severity | Critical / High / Medium / Low / Info |
-| ResourceType | Type of resource the finding applies to |
-| Resource | Name of the affected resource |
-| Finding | Description of the identified issue |
+| Category | Security, Identity, Governance, Reliability, Cost, Operations, Performance, Infrastructure, Compliance |
+| Source | Native, Azure Advisor, Prowler, Maester, AzGovViz, PSRule (AzGovViz), WARA |
+| CheckId | Stable ID of the check (used to group findings into issues and compare runs) |
+| Title | Name of the issue |
+| Resource / ResourceType / ResourceId / SubscriptionId | Affected resource |
+| Finding | Detail for this resource |
 | Recommendation | Suggested action |
+| Reference | Documentation link |
+| Frameworks | Compliance mapping (CIS, ISO, NIST, EIDSCA, WAF pillar ...) |
 | Timestamp | When the finding was recorded |
 
 ---
 
-## 💡 Tips
+## 🗂️ Project structure
 
-- Run the script regularly (e.g. via a scheduled task or pipeline) to track the health of your environment over time.
-- Use the CSV file to build trends and dashboards in Excel or Power BI.
-- Because `$ErrorActionPreference` is set to `SilentlyContinue`, the run is not aborted if individual resources lack permissions - run with sufficient rights for a complete result.
+```
+Invoke-AzureAudit.ps1            # Parameters, sign-in, orchestration, summary
+src/
+├── AuditCommon.ps1              # Helpers, Add-Finding, tool-run register
+├── Checks.Security.ps1          # Built-in: NSG, public IPs, RBAC, classic admins
+├── Checks.Cost.ps1              # Built-in: disks, stopped VMs, NICs, empty RGs
+├── Checks.Infrastructure.ps1    # Built-in: VM encryption, KV certificates, soft delete
+├── Checks.Compliance.ps1        # Built-in: TLS/HTTPS, public blob access, KV protection, tags
+├── Checks.Advisor.ps1           # Built-in: Azure Advisor
+├── Tools.Common.ps1             # Child-process runner, module installs, dispatcher
+├── Tools.Prowler.ps1            # Run + import Prowler (OCSF JSON)
+├── Tools.Maester.ps1            # Run + import Maester (JSON)
+├── Tools.AzGovViz.ps1           # Run + import AzGovViz CSV exports (incl. PSRule)
+├── Tools.WARA.ps1               # Run + import WARA collector JSON
+├── Tools.ARI.ps1                # Run ARI, link Excel + diagram
+├── AuditReport.ps1              # CSV, audit-data.json and HTML generation
+└── report-template.html         # Report layout (HTML/CSS/JS); data is injected as JSON
+```
+
+### Adding a check or a tool
+
+- **Built-in check:** call `Add-Finding` with `-CheckId` and `-Title` (so findings group into one issue) and `-ResourceId` (so the Resources tab can correlate across tools).
+- **New tool:** add `src\Tools.<Name>.ps1` with `Invoke-<Name>Scan` (writes to `raw\<name>` and calls `Save-ToolRunState`) and `Import-<Name>Results` (calls `Add-Finding -Source <Name>` and `Complete-ToolImport`), then register it in `Invoke-AuditTools` and the `-Tools` parameter.
 
 ---
 
@@ -178,13 +212,18 @@ Each finding is classified with one of the following levels:
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| **"Could not fetch Advisor data"** | The `Az.Advisor` module is missing or you are not signed in. Install it with `Install-Module Az.Advisor -Scope CurrentUser`, or run with `-SkipAdvisor`. The accompanying message in parentheses shows the underlying error. |
-| **Advisor rows show "See Azure Advisor"** | The recommendation genuinely has no problem/solution text. Other recommendations are still populated from the live data. |
-| **Run aborts with a `??` parse error** | The script targets PowerShell 7+. Run it with `pwsh`, not Windows PowerShell 5.1. |
-| **Garbled characters (å/ä/ö, box drawing)** | The `.ps1` files are saved as UTF-8 with BOM. Keep that encoding when editing so the banners render correctly. |
+| Tool shows **Not installed** | Install the prerequisite or rerun with `-InstallMissing` (Prowler needs `pip install prowler`). |
+| **WARA failed** | `Start-WARACollector` refuses to run when a newer module exists in PowerShell Gallery – run `Update-Module WARA`. |
+| **AzGovViz failed / partial** | Reader on the management group is required. Use `-ManagementGroupId` for a management group you can read, or `-ExcludeTools AzGovViz`. See `logs\azgovviz.log`. |
+| **Maester has few results** | The account needs Global Reader; Exchange/Teams tests are skipped because only Azure and Graph are connected. |
+| **Prowler asks for a browser sign-in** | Run `az login --tenant <tenant>` first to let Prowler reuse the CLI session. |
+| **"Could not fetch Advisor data"** | Install `Az.Advisor` or run with `-SkipAdvisor`. |
+| **Run aborts with a `??` parse error** | Use `pwsh` (PowerShell 7), not Windows PowerShell 5.1. |
+| **Garbled characters (å/ä/ö, box drawing)** | Keep the `.ps1` files saved as UTF-8 with BOM. |
+| **Report links to raw reports don't open** | Keep the run folder intact – links are relative to the HTML file. |
 
 ---
 
 ## ⚠️ Disclaimer
 
-The script performs **read-only operations** and makes no changes to your Azure environment. The recommendations are general guidelines - always evaluate each finding against your organization's needs and policies before taking action.
+The script and the tools it runs perform **read-only operations**. Recommendations are general guidance – evaluate each finding against the organisation's requirements before changing anything. Each external tool is subject to its own license (Prowler: Apache 2.0; Maester, AzGovViz, WARA, ARI: MIT).

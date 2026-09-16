@@ -16,7 +16,9 @@ function Invoke-ComplianceChecks {
     foreach ($sa in $storageAccounts) {
         if (-not $sa.EnableHttpsTrafficOnly) {
             Add-Finding -Category "Compliance" -Severity "High" `
+                -CheckId "NATIVE-COMP-001" -Title "Storage account allows HTTP (secure transfer not required)" `
                 -Resource $sa.StorageAccountName `
+                -ResourceId $sa.Id `
                 -ResourceType "Storage Account" `
                 -Finding "'Secure transfer required' (HTTPS only) is NOT enabled" `
                 -Recommendation "Enable 'Secure transfer required' on all Storage Accounts."
@@ -25,7 +27,9 @@ function Invoke-ComplianceChecks {
         $tlsVersion = $sa.MinimumTlsVersion
         if ($tlsVersion -notin @("TLS1_2","TLS1_3")) {
             Add-Finding -Category "Compliance" -Severity "High" `
+                -CheckId "NATIVE-COMP-002" -Title "Storage account minimum TLS version below 1.2" `
                 -Resource $sa.StorageAccountName `
+                -ResourceId $sa.Id `
                 -ResourceType "Storage Account" `
                 -Finding "Minimum TLS version is $tlsVersion (should be TLS 1.2+)" `
                 -Recommendation "Set MinimumTlsVersion to TLS1_2. Microsoft retired TLS 1.0/1.1 on 31 Aug 2025."
@@ -33,7 +37,9 @@ function Invoke-ComplianceChecks {
 
         if ($sa.AllowBlobPublicAccess -eq $true) {
             Add-Finding -Category "Compliance" -Severity "High" `
+                -CheckId "NATIVE-COMP-003" -Title "Storage account allows public blob access" `
                 -Resource $sa.StorageAccountName `
+                -ResourceId $sa.Id `
                 -ResourceType "Storage Account" `
                 -Finding "Public blob access (AllowBlobPublicAccess) is ENABLED" `
                 -Recommendation "Disable AllowBlobPublicAccess unless anonymous read access is explicitly required."
@@ -48,14 +54,18 @@ function Invoke-ComplianceChecks {
             $app = Get-AzWebApp -ResourceGroupName $appRef.ResourceGroup -Name $appRef.Name -ErrorAction Stop
             if (-not $app.HttpsOnly) {
                 Add-Finding -Category "Compliance" -Severity "High" `
+                    -CheckId "NATIVE-COMP-004" -Title "App Service does not enforce HTTPS" `
                     -Resource $app.Name `
+                    -ResourceId $app.Id `
                     -ResourceType "App Service" `
                     -Finding "HTTPS Only is NOT enabled on the App Service" `
                     -Recommendation "Enable HTTPS Only in the App Service configuration."
             }
             if ($app.SiteConfig.MinTlsVersion -notin @("1.2","1.3")) {
                 Add-Finding -Category "Compliance" -Severity "High" `
+                    -CheckId "NATIVE-COMP-005" -Title "App Service minimum TLS version below 1.2" `
                     -Resource $app.Name `
+                    -ResourceId $app.Id `
                     -ResourceType "App Service" `
                     -Finding "Minimum TLS version is $($app.SiteConfig.MinTlsVersion) (should be 1.2+)" `
                     -Recommendation "Set minTlsVersion to 1.2 in App Service General Settings."
@@ -70,14 +80,18 @@ function Invoke-ComplianceChecks {
         $kvDetail = Get-AzKeyVault -VaultName $kv.VaultName
         if (-not $kvDetail.EnableSoftDelete) {
             Add-Finding -Category "Compliance" -Severity "High" `
+                -CheckId "NATIVE-COMP-006" -Title "Key Vault soft delete disabled" `
                 -Resource $kv.VaultName `
+                -ResourceId $kvDetail.ResourceId `
                 -ResourceType "Key Vault" `
                 -Finding "Soft Delete is NOT enabled" `
                 -Recommendation "Enable soft delete (mandatory since 2021) and purge protection on all Key Vaults."
         }
         if (-not $kvDetail.EnablePurgeProtection) {
             Add-Finding -Category "Compliance" -Severity "Medium" `
+                -CheckId "NATIVE-COMP-007" -Title "Key Vault purge protection disabled" `
                 -Resource $kv.VaultName `
+                -ResourceId $kvDetail.ResourceId `
                 -ResourceType "Key Vault" `
                 -Finding "Purge Protection is NOT enabled" `
                 -Recommendation "Enable purge protection to prevent permanent deletion during the retention period."
@@ -86,14 +100,16 @@ function Invoke-ComplianceChecks {
 
     # Tag check
     Write-Step "Checking resource tags (required: $($RequiredTags -join ', '))..."
-    $allResources = Get-AzResource
+    $allResources = @(Get-AzResource)
     $untaggedCount = 0
     foreach ($res in $allResources) {
-        $missing = $RequiredTags | Where-Object { (-not $res.Tags) -or (-not $res.Tags.ContainsKey($_)) }
+        $missing = @($RequiredTags | Where-Object { (-not $res.Tags) -or (-not $res.Tags.ContainsKey($_)) })
         if ($missing.Count -gt 0) {
             $untaggedCount++
             Add-Finding -Category "Compliance" -Severity "Low" `
+                -CheckId "NATIVE-COMP-008" -Title "Resource is missing required tags" `
                 -Resource "$($res.Name) ($($res.ResourceGroupName))" `
+                -ResourceId $res.ResourceId `
                 -ResourceType $res.ResourceType `
                 -Finding "Missing tags: $($missing -join ', ')" `
                 -Recommendation "Add standard tags for cost tracking, ownership and environment classification."
