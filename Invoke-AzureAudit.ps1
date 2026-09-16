@@ -144,14 +144,35 @@ function Stop-Audit {
 # ─────────────────────────────────────────────────────────────
 
 $srcPath = Join-Path $PSScriptRoot "src"
-foreach ($file in @(
+# Loading must fail loudly: with SilentlyContinue a file that cannot be loaded (blocked by the
+# execution policy, missing, or broken) would be skipped and surface later as "Invoke-XScan is not recognized".
+$srcFiles = @(
     "AuditCommon.ps1",
     "Checks.Security.ps1", "Checks.Cost.ps1", "Checks.Infrastructure.ps1", "Checks.Compliance.ps1", "Checks.Advisor.ps1",
     "Tools.Common.ps1", "Tools.Prowler.ps1", "Tools.Maester.ps1", "Tools.PSRule.ps1", "Tools.AzGovViz.ps1", "Tools.WARA.ps1", "Tools.ARI.ps1",
     "AuditReport.ps1"
-)) {
-    . (Join-Path $srcPath $file)
+)
+foreach ($file in $srcFiles) {
+    $srcFile = Join-Path $srcPath $file
+    if (-not (Test-Path -LiteralPath $srcFile)) { Stop-Audit "Missing file: $srcFile. Copy the complete src folder." }
+    $ErrorActionPreference = "Stop"
+    try {
+        . $srcFile
+    }
+    catch {
+        $hint = ""
+        if ($IsWindows -and (Get-Item -LiteralPath $srcFile -Stream Zone.Identifier -ErrorAction SilentlyContinue)) {
+            $hint = "`nThe file is marked as downloaded from the internet and the execution policy blocks it. Unblock the folder once:`n  Get-ChildItem '$PSScriptRoot' -Recurse -File | Unblock-File`nor start the audit with: pwsh -ExecutionPolicy Bypass -File .\Invoke-AzureAudit.ps1 ..."
+        }
+        Stop-Audit "Could not load src\$file`: $($_.Exception.Message)$hint"
+    }
+    finally {
+        $ErrorActionPreference = "SilentlyContinue"
+    }
 }
+$missingFunctions = @("Invoke-AuditTools", "Invoke-ProwlerScan", "Invoke-MaesterScan", "Invoke-PSRuleScan", "Invoke-AzGovVizScan",
+    "Invoke-WARAScan", "Invoke-ARIScan", "New-AuditReport") | Where-Object { -not (Get-Command $_ -CommandType Function -ErrorAction SilentlyContinue) }
+if ($missingFunctions) { Stop-Audit "The src files did not load completely (missing: $($missingFunctions -join ', ')). Copy the complete src folder again." }
 
 $allTools = @("Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")
 $selectedTools = if ($Tools -contains "All") { $allTools } else { $allTools | Where-Object { $_ -in $Tools } }
