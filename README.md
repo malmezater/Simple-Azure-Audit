@@ -7,7 +7,8 @@ A PowerShell script that reviews an Azure subscription and its Entra ID tenant, 
 | **Built-in checks** | NSG exposure, RBAC, classic admins, unused resources, encryption, Key Vault certificates and protection, storage and App Service TLS/HTTPS, tagging, Azure Advisor |
 | **[Prowler](https://github.com/prowler-cloud/prowler)** | CIS, NIST, ISO 27001 and more security checks for Azure and Entra ID |
 | **[Maester](https://maester.dev)** | Entra ID, Conditional Access, EIDSCA and CISA identity tests |
-| **[Azure Governance Visualizer](https://github.com/Azure/Azure-Governance-Visualizer)** | PSRule for Azure (Well-Architected, all pillars), orphaned resources, risky RBAC assignments, Defender for Cloud plans |
+| **[PSRule for Azure](https://azure.github.io/PSRule.Rules.Azure/)** | Well-Architected rules for all five pillars, evaluated against the live resource configuration |
+| **[Azure Governance Visualizer](https://github.com/Azure/Azure-Governance-Visualizer)** | Orphaned resources, risky RBAC assignments, Defender for Cloud plan coverage, plus its own governance HTML report |
 | **[WARA](https://github.com/Azure/Well-Architected-Reliability-Assessment)** | Microsoft's reliability recommendations (APRL) and upcoming service retirements |
 | **[Azure Resource Inventory](https://github.com/microsoft/ARI)** | Excel inventory and draw.io network diagram, linked as an appendix |
 
@@ -37,8 +38,8 @@ A *finding* is one failed check on one resource. An *issue* groups all findings 
 | Azure Advisor | Impact High/Medium/Low | Advisor category → Security, Reliability, Cost, Operations, Performance |
 | Prowler | Critical/High/Medium/Low/Informational | Security (Entra/IAM → Identity, Monitor → Operations, Policy → Governance) |
 | Maester | Test severity (Investigate → Info) | Identity (Azure-tagged tests → Security) |
-| PSRule (via AzGovViz) | Critical → High, Important → Medium, Awareness → Low | Well-Architected pillar |
-| AzGovViz extras | Orphaned resources Low/Medium, Owner on SP High, orphaned assignments Medium | Cost, Identity, Security |
+| PSRule for Azure | Critical → High, Important → Medium, Awareness → Low | Well-Architected pillar |
+| AzGovViz | Orphaned resources Low/Medium, Owner on SP High, orphaned assignments Medium, Defender plan off Low | Cost, Identity, Security |
 | WARA | Recommendation impact | Reliability |
 
 ---
@@ -51,17 +52,31 @@ A *finding* is one failed check on one resource. An *issue* groups all findings 
 | `Az.Accounts`, `Az.Compute`, `Az.Network`, `Az.Storage`, `Az.KeyVault`, `Az.Resources`, `Az.Websites` | Built-in checks |
 | `Az.Advisor` (optional) | Azure Advisor in the built-in checks |
 | Python 3.10–3.13 + `pip install prowler` | Prowler |
-| `Maester`, `Pester` modules | Maester |
+| `Maester`, `Pester`, `Microsoft.Graph.Authentication` modules | Maester |
+| `PSRule.Rules.Azure` module (pulls in `PSRule`) | PSRule for Azure |
 | `WARA` module | WARA |
-| `AzureResourceInventory` module | ARI |
-| AzGovViz script (downloaded by `-InstallMissing`) | AzGovViz |
+| `AzureResourceInventory`, `ImportExcel` modules | ARI |
+| AzGovViz script (downloaded by `-InstallMissing`), `AzAPICall` module | AzGovViz |
 | Azure CLI (optional) | Lets Prowler reuse `az login` instead of opening a browser |
 
+### Option 1 – prepare a dedicated machine (recommended)
+
+1. Install the winget apps and PowerShell modules listed in [`PAWDeploy-AzureAudit.xml`](PAWDeploy-AzureAudit.xml) (PowerShell 7, Azure CLI, Python 3.12 + all modules).
+2. Run the prerequisites script from an elevated PowerShell 7 prompt. It installs/updates the modules, installs Prowler in a Python venv under `%ProgramData%\SimpleAzureAudit\prowler` (added to PATH), downloads AzGovViz and the Maester tests into `.\tools`:
+
 ```powershell
-Install-Module Az.Accounts, Az.Compute, Az.Network, Az.Storage, Az.KeyVault, Az.Resources, Az.Websites, Az.Advisor -Scope CurrentUser
+pwsh -ExecutionPolicy Bypass -File .\Install-AuditPrerequisites.ps1
+```
+
+Run it again later to update everything.
+
+### Option 2 – install on demand
+
+```powershell
+Install-Module Az, Az.ResourceGraph, Az.CostManagement -Scope CurrentUser
 pip install prowler
 
-# Or let the script install the PowerShell modules and download AzGovViz:
+# Let the audit script install the remaining PowerShell modules and download AzGovViz:
 .\Invoke-AzureAudit.ps1 -InstallMissing
 ```
 
@@ -71,7 +86,7 @@ Tools that are missing are shown as **Not installed** in the report and the rest
 
 | Scope | Role | Used by |
 |-------|------|---------|
-| Subscription | **Reader** (Security Reader recommended) | Built-in checks, Prowler, WARA, ARI |
+| Subscription | **Reader** (Security Reader recommended) | Built-in checks, Prowler, PSRule, WARA, ARI |
 | Management group (default: tenant root) | **Reader** | AzGovViz |
 | Entra ID | **Global Reader** | Maester, Prowler Entra checks, AzGovViz identity resolution |
 
@@ -83,7 +98,7 @@ Checks that cannot run because of missing permissions produce no findings – a 
 
 ```powershell
 .\Invoke-AzureAudit.ps1 [-TenantID <string>] [-SubscriptionId <string>] [-OutputPath <string>]
-                        [-Tools <All|Native|Prowler|Maester|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
+                        [-Tools <All|Native|Prowler|Maester|PSRule|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
                         [-ManagementGroupId <string>] [-ToolsPath <string>] [-InstallMissing]
                         [-CustomerName <string>] [-PreparedBy <string>] [-RequiredTags <string>]
                         [-SkipAdvisor] [-OpenReport] [-ImportFrom <string>]
@@ -92,7 +107,7 @@ Checks that cannot run because of missing permissions produce no findings – a 
 ### Sign-in
 
 1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and selects the subscription, prompting when several are available.
-2. PowerShell-based tools (AzGovViz, WARA, ARI) run in a child `pwsh` process and reuse that Az sign-in.
+2. PowerShell-based tools (PSRule, AzGovViz, WARA, ARI) run in a child `pwsh` process and reuse that Az sign-in.
 3. **Maester** signs in to Microsoft Graph interactively (`Connect-Maester`).
 4. **Prowler** reuses `az login` when the Azure CLI is signed in to the same tenant; otherwise it opens a browser sign-in.
 
@@ -157,7 +172,8 @@ AzureAudit_<Subscription>_<timestamp>/
     ├── native/     findings.json
     ├── prowler/    prowler.ocsf.json, prowler.html, prowler.csv, compliance/
     ├── maester/    maester.json, maester.html, maester.md
-    ├── azgovviz/   AzGovViz_*.html, *_PSRule.csv, *_RoleAssignments.csv, ...
+    ├── psrule/     psrule-results.json
+    ├── azgovviz/   AzGovViz_*.html, *_RoleAssignments.csv, *_MDfCCoverage.csv, ...
     ├── wara/       WARA-File-*.json, recommendations.json
     └── ari/        *.xlsx, *.xml (draw.io)
 ```
@@ -168,7 +184,7 @@ AzureAudit_<Subscription>_<timestamp>/
 |--------|---------|
 | Severity | Critical / High / Medium / Low / Info |
 | Category | Security, Identity, Governance, Reliability, Cost, Operations, Performance, Infrastructure, Compliance |
-| Source | Native, Azure Advisor, Prowler, Maester, AzGovViz, PSRule (AzGovViz), WARA |
+| Source | Native, Azure Advisor, Prowler, Maester, PSRule, AzGovViz, WARA |
 | CheckId | Stable ID of the check (used to group findings into issues and compare runs) |
 | Title | Name of the issue |
 | Resource / ResourceType / ResourceId / SubscriptionId | Affected resource |
@@ -184,6 +200,8 @@ AzureAudit_<Subscription>_<timestamp>/
 
 ```
 Invoke-AzureAudit.ps1            # Parameters, sign-in, orchestration, summary
+Install-AuditPrerequisites.ps1   # Installs modules, Prowler, AzGovViz and Maester tests (no audit)
+PAWDeploy-AzureAudit.xml         # Winget apps + PowerShell modules for PAWDeploy
 src/
 ├── AuditCommon.ps1              # Helpers, Add-Finding, tool-run register
 ├── Checks.Security.ps1          # Built-in: NSG, public IPs, RBAC, classic admins
@@ -194,7 +212,8 @@ src/
 ├── Tools.Common.ps1             # Child-process runner, module installs, dispatcher
 ├── Tools.Prowler.ps1            # Run + import Prowler (OCSF JSON)
 ├── Tools.Maester.ps1            # Run + import Maester (JSON)
-├── Tools.AzGovViz.ps1           # Run + import AzGovViz CSV exports (incl. PSRule)
+├── Tools.PSRule.ps1             # Export-AzRuleData + Invoke-PSRule, import results
+├── Tools.AzGovViz.ps1           # Run + import AzGovViz CSV exports
 ├── Tools.WARA.ps1               # Run + import WARA collector JSON
 ├── Tools.ARI.ps1                # Run ARI, link Excel + diagram
 ├── AuditReport.ps1              # CSV, audit-data.json and HTML generation
@@ -212,8 +231,10 @@ src/
 
 | Symptom | Cause / fix |
 |---------|-------------|
-| Tool shows **Not installed** | Install the prerequisite or rerun with `-InstallMissing` (Prowler needs `pip install prowler`). |
+| Tool shows **Not installed** | Run `Install-AuditPrerequisites.ps1`, or rerun with `-InstallMissing` (Prowler needs `pip install prowler`). |
+| **Prowler not found right after installing** | Open a new terminal so the updated PATH is loaded. |
 | **WARA failed** | `Start-WARACollector` refuses to run when a newer module exists in PowerShell Gallery – run `Update-Module WARA`. |
+| **PSRule failed** | `Export-AzRuleData` needs Reader on the subscription; see `logs\psrule.log`. Large subscriptions can take a while. |
 | **AzGovViz failed / partial** | Reader on the management group is required. Use `-ManagementGroupId` for a management group you can read, or `-ExcludeTools AzGovViz`. See `logs\azgovviz.log`. |
 | **Maester has few results** | The account needs Global Reader; Exchange/Teams tests are skipped because only Azure and Graph are connected. |
 | **Prowler asks for a browser sign-in** | Run `az login --tenant <tenant>` first to let Prowler reuse the CLI session. |
@@ -226,4 +247,4 @@ src/
 
 ## ⚠️ Disclaimer
 
-The script and the tools it runs perform **read-only operations**. Recommendations are general guidance – evaluate each finding against the organisation's requirements before changing anything. Each external tool is subject to its own license (Prowler: Apache 2.0; Maester, AzGovViz, WARA, ARI: MIT).
+The script and the tools it runs perform **read-only operations**. Recommendations are general guidance – evaluate each finding against the organisation's requirements before changing anything. Each external tool is subject to its own license (Prowler: Apache 2.0; Maester, PSRule for Azure, AzGovViz, WARA, ARI: MIT).

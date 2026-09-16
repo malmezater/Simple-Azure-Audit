@@ -1,15 +1,15 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Tools.AzGovViz.ps1
 # Azure Governance Visualizer (https://aka.ms/AzGovViz) - MIT
-# Runs AzGovVizParallel.ps1 with PSRule for Azure enabled, then imports:
-#   *_PSRule.csv                               Well-Architected rule results (all pillars)
+# Runs AzGovVizParallel.ps1, then imports:
 #   *_ResourcesCostOptimizationAndCleanup.csv  orphaned / unused resources
 #   *_RoleAssignments.csv                      orphaned identities, Owner on SPs, custom Owner roles
 #   *_MDfCCoverage.csv                         Defender for Cloud plans not enabled
 #
 # Install: the script is downloaded to <ToolsPath>\Azure-Governance-Visualizer
 #          (-InstallMissing) or cloned manually from GitHub. AzGovViz installs
-#          its own dependencies (AzAPICall, PSRule.Rules.Azure) on first run.
+#          its own dependency (AzAPICall) on first run.
+# Note:    AzGovViz's -DoPSRule integration is paused upstream; PSRule runs as its own tool (Tools.PSRule.ps1).
 # Access:  Reader on the management group that is scanned (default: tenant root)
 #          plus the ability to read Entra ID users/groups/service principals.
 # ─────────────────────────────────────────────────────────────
@@ -71,7 +71,6 @@ function Invoke-AzGovVizScan {
     -TenantId4AzContext $(ConvertTo-PSLiteral $TenantId) ``
     -SubscriptionIdWhitelist @($(ConvertTo-PSLiteral $SubscriptionId)) ``
     -OutputPath $(ConvertTo-PSLiteral $RawFolder) ``
-    -DoPSRule ``
     -NoPIMEligibility ``
     -StatsOptOut
 "@
@@ -108,8 +107,7 @@ function Import-AzGovVizResults {
     $html = Get-ChildItem -Path $RawFolder -Filter "AzGovViz_*.html" -File -Recurse -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notmatch '_(DefinitionInsights|HierarchyMap)' } |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    $psRule = @(Import-AzGovVizCsv -RawFolder $RawFolder -Suffix "_PSRule.csv")
-    if (-not $html -and $psRule.Count -eq 0) {
+    if (-not $html) {
         Complete-ToolImport -Tool "AzGovViz" -RawFolder $RawFolder -NoResults
         return
     }
@@ -117,43 +115,6 @@ function Import-AzGovVizResults {
     Write-Step "Importing AzGovViz CSV exports..."
     $inScope = { param($subId) (-not $SubscriptionId) -or (-not $subId) -or ($subId -eq $SubscriptionId) }
     $count = 0
-
-    # ── PSRule for Azure (Well-Architected) ─────────────────
-    $psPassed = 0; $psFailed = 0
-    foreach ($r in $psRule) {
-        if (-not (& $inScope $r.subscriptionId)) { continue }
-        switch ("$($r.result)") {
-            "Pass" { $psPassed++ }
-            "Fail" {
-                $psFailed++
-                $category = switch -Regex ("$($r.pillar)") {
-                    'Reliab'      { "Reliability"; break }
-                    'Secur'       { "Security"; break }
-                    'Cost'        { "Cost"; break }
-                    'Operational' { "Operations"; break }
-                    'Performance' { "Performance"; break }
-                    default       { "Governance" }
-                }
-                $severity = switch -Regex ("$($r.severity)") {
-                    'Critical'  { "High"; break }
-                    'Important' { "Medium"; break }
-                    'Awareness' { "Low"; break }
-                    default     { "Low" }
-                }
-                # PSRule exposes either a display name or the rule name (Azure.Storage.SoftDelete);
-                # prefer the synopsis as title when only the technical rule name is available.
-                $title = if ("$($r.rule)" -match '^Azure\.[\w.]+$' -and $r.description) { ConvertTo-PlainText "$($r.description)" 300 } else { "$($r.rule)" }
-                Add-Finding -Source "PSRule (AzGovViz)" -Category $category -Severity $severity `
-                    -CheckId "PSRULE::$($r.rule)" -Title $title `
-                    -ResourceId "$($r.resourceId)" -ResourceType "$($r.resourceType)" -SubscriptionId "$($r.subscriptionId)" `
-                    -Finding (ConvertTo-PlainText "$($r.description)") `
-                    -Recommendation (ConvertTo-PlainText "$($r.recommendation)") `
-                    -Reference "$($r.link)" `
-                    -Frameworks "WAF: $($r.pillar)$(if ($r.category) { " / $($r.category)" })"
-                $count++
-            }
-        }
-    }
 
     # ── Orphaned / unused resources ─────────────────────────
     foreach ($o in @(Import-AzGovVizCsv -RawFolder $RawFolder -Suffix "_ResourcesCostOptimizationAndCleanup.csv")) {
@@ -226,15 +187,11 @@ function Import-AzGovVizResults {
 
     $reports = @(
         New-ReportLink -Label "AzGovViz HTML report" -File $html -RunFolder $RunFolder
-        New-ReportLink -Label "PSRule results (CSV)" -File (Get-LatestFile -Path $RawFolder -Filter "AzGovViz_*_PSRule.csv" -Recurse) -RunFolder $RunFolder
     ) | Where-Object { $_ }
 
-    Write-Step "  $count findings imported ($psFailed PSRule failures, $psPassed passes)." "Gray"
+    Write-Step "  $count findings imported." "Gray"
     $state = Get-ToolRunState $RawFolder
     $mg = "$(Get-PropValue $state 'ManagementGroupId')"
     Complete-ToolImport -Tool "AzGovViz" -RawFolder $RawFolder -FindingCount $count `
-        -Passed $(if ($psRule.Count) { $psPassed } else { -1 }) `
-        -Failed $(if ($psRule.Count) { $psFailed } else { -1 }) `
-        -Total  $(if ($psRule.Count) { $psPassed + $psFailed } else { -1 }) `
         -Scope $(if ($mg) { "Management group: $mg" } else { "" }) -Reports $reports
 }

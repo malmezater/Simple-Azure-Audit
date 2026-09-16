@@ -17,7 +17,12 @@ function Invoke-ProwlerScan {
         [Parameter(Mandatory)][string]$SubscriptionId
     )
 
+    # PATH first, then the shared venv created by Install-AuditPrerequisites.ps1.
     $exe = Get-Command prowler -ErrorAction SilentlyContinue
+    if (-not $exe -and $env:ProgramData) {
+        $venvExe = Join-Path $env:ProgramData "SimpleAzureAudit\prowler\Scripts\prowler.exe"
+        if (Test-Path $venvExe) { $exe = Get-Command $venvExe }
+    }
     if (-not $exe) {
         Write-Step "  Prowler not found. Install it with: pip install prowler" "DarkYellow"
         Save-ToolRunState -RawFolder $RawFolder -State @{ Status = "NotInstalled"; Message = "Prowler CLI not found. Install with 'pip install prowler' (Python 3.10-3.13)." }
@@ -36,7 +41,8 @@ function Invoke-ProwlerScan {
     }
     Write-Step "  Auth mode: $($authArgs[0])" "Gray"
 
-    $version = "$(& prowler --version 2>$null)".Trim()
+    $prowlerExe = $exe.Source
+    $version = "$(& $prowlerExe --version 2>$null)".Trim()
     $prowlerArgs = @("azure") + $authArgs + @(
         "--subscription-ids", $SubscriptionId,
         "--output-formats", "csv", "json-ocsf", "html",
@@ -48,7 +54,7 @@ function Invoke-ProwlerScan {
     Write-Step "  Running: prowler $($prowlerArgs -join ' ')" "Gray"
     $log = Join-Path $LogDirectory "prowler.log"
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    & prowler @prowlerArgs 2>&1 | Tee-Object -FilePath $log | Out-Host
+    & $prowlerExe @prowlerArgs 2>&1 | Tee-Object -FilePath $log | Out-Host
     $exit = $LASTEXITCODE
     $sw.Stop()
 

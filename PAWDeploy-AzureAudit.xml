@@ -1,0 +1,27 @@
+<!--
+  Simple Azure Audit - prerequisites for PAWDeploy
+  Winget apps first, then PowerShell modules. Install the modules in PowerShell 7
+  (WARA requires 7.4+). Prowler, the AzGovViz script and the Maester tests are not
+  winget/Gallery packages: run Install-AuditPrerequisites.ps1 as a post-install step.
+-->
+
+<!-- ── Winget ─────────────────────────────────────────────── -->
+<App Id="Microsoft.PowerShell"         DisplayName="PowerShell 7"                 Default="True"   />
+<App Id="Microsoft.AzureCLI"           DisplayName="Microsoft Azure CLI"          Default="True"   />
+<App Id="Python.Python.3.12"           DisplayName="Python 3.12 (Prowler)"        Default="True"   />
+<App Id="Git.Git"                      DisplayName="Git"                          Default="False"  />
+<App Id="JGraph.Draw"                  DisplayName="draw.io (ARI network diagram)" Default="False" />
+
+<!-- ── PowerShell modules ─────────────────────────────────── -->
+<Module Name="Az"                                  DisplayName="Azure Az"                              Default="True"  />
+<Module Name="Az.ResourceGraph"                    DisplayName="Azure Resource Graph"                  Default="True"  />
+<Module Name="Az.CostManagement"                   DisplayName="Azure Cost Management"                 Default="True"  />
+<Module Name="Microsoft.Graph.Authentication"      DisplayName="Microsoft Graph Authentication"        Default="True"  />
+<Module Name="Pester"                              DisplayName="Pester (Maester)"                      Default="True"  />
+<Module Name="Maester"                             DisplayName="Maester"                               Default="True"  />
+<Module Name="PSRule"                              DisplayName="PSRule"                                Default="True"  />
+<Module Name="PSRule.Rules.Azure"                  DisplayName="PSRule for Azure"                      Default="True"  />
+<Module Name="WARA"                                DisplayName="Well-Architected Reliability Assessment" Default="True" />
+<Module Name="ImportExcel"                         DisplayName="ImportExcel (ARI)"                     Default="True"  />
+<Module Name="AzureResourceInventory"              DisplayName="Azure Resource Inventory"              Default="True"  />
+<Module Name="AzAPICall"                           DisplayName="AzAPICall (AzGovViz)"                  Default="True"  />

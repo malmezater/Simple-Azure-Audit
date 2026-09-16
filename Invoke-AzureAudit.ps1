@@ -3,7 +3,7 @@
 <#
 .SYNOPSIS
     Azure Environment Audit Script - merges built-in checks with Prowler, Maester,
-    Azure Governance Visualizer (PSRule), WARA and Azure Resource Inventory into one report.
+    PSRule for Azure, Azure Governance Visualizer, WARA and Azure Resource Inventory into one report.
 
 .DESCRIPTION
     Runs a review of an Azure subscription (plus its Entra ID tenant) and generates:
@@ -23,7 +23,8 @@
     External tools (all free / open source):
       Prowler   - CIS/NIST/ISO security posture for Azure and Entra ID (pip install prowler)
       Maester   - Entra ID, Conditional Access, EIDSCA, CISA tests (PowerShell module)
-      AzGovViz  - RBAC, policy, orphaned resources, Defender plans + PSRule for Azure (WAF)
+      PSRule    - PSRule for Azure, Well-Architected rules for all pillars (PowerShell module)
+      AzGovViz  - RBAC, policy, orphaned resources, Defender plan coverage
       WARA      - Microsoft Well-Architected Reliability Assessment collector (PowerShell module)
       ARI       - Azure Resource Inventory Excel + network diagram (appendix, no findings)
 
@@ -52,7 +53,7 @@
     Comma-separated list of required tags to check for. Default: "Environment,Owner,CostCenter"
 
 .PARAMETER Tools
-    Which assessments to run: All, Native, Prowler, Maester, AzGovViz, WARA, ARI. Default: All.
+    Which assessments to run: All, Native, Prowler, Maester, PSRule, AzGovViz, WARA, ARI. Default: All.
 
 .PARAMETER ExcludeTools
     Tools to leave out when -Tools All is used, e.g. -ExcludeTools ARI,AzGovViz
@@ -64,7 +65,7 @@
     Folder for downloaded tool content (AzGovViz script, Maester tests). Default: .\tools next to this script.
 
 .PARAMETER InstallMissing
-    Install missing PowerShell modules (Maester, Pester, WARA, AzureResourceInventory) and download AzGovViz.
+    Install missing PowerShell modules (Maester, Pester, PSRule.Rules.Azure, WARA, AzureResourceInventory) and download AzGovViz.
 
 .PARAMETER ImportFrom
     Rebuild the report from an existing run folder without signing in or scanning again.
@@ -101,9 +102,9 @@ param(
     [string]   $SubscriptionId,
     [string]   $OutputPath    = ".",
     [string]   $RequiredTags  = "Environment,Owner,CostCenter",
-    [ValidateSet("All","Native","Prowler","Maester","AzGovViz","WARA","ARI")]
+    [ValidateSet("All","Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")]
     [string[]] $Tools         = @("All"),
-    [ValidateSet("Native","Prowler","Maester","AzGovViz","WARA","ARI")]
+    [ValidateSet("Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")]
     [string[]] $ExcludeTools  = @(),
     [string]   $ManagementGroupId,
     [string]   $ToolsPath     = (Join-Path $PSScriptRoot "tools"),
@@ -128,13 +129,13 @@ $srcPath = Join-Path $PSScriptRoot "src"
 foreach ($file in @(
     "AuditCommon.ps1",
     "Checks.Security.ps1", "Checks.Cost.ps1", "Checks.Infrastructure.ps1", "Checks.Compliance.ps1", "Checks.Advisor.ps1",
-    "Tools.Common.ps1", "Tools.Prowler.ps1", "Tools.Maester.ps1", "Tools.AzGovViz.ps1", "Tools.WARA.ps1", "Tools.ARI.ps1",
+    "Tools.Common.ps1", "Tools.Prowler.ps1", "Tools.Maester.ps1", "Tools.PSRule.ps1", "Tools.AzGovViz.ps1", "Tools.WARA.ps1", "Tools.ARI.ps1",
     "AuditReport.ps1"
 )) {
     . (Join-Path $srcPath $file)
 }
 
-$allTools = @("Native","Prowler","Maester","AzGovViz","WARA","ARI")
+$allTools = @("Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")
 $selectedTools = if ($Tools -contains "All") { $allTools } else { $allTools | Where-Object { $_ -in $Tools } }
 $selectedTools = @($selectedTools | Where-Object { $_ -notin $ExcludeTools })
 if ($selectedTools.Count -eq 0) { throw "No tools selected. Check -Tools / -ExcludeTools." }

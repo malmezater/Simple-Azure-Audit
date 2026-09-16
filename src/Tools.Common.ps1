@@ -3,7 +3,7 @@
 # Shared plumbing for the external assessment tools:
 # prerequisite checks, child-process execution and file helpers.
 #
-# External PowerShell tools (Maester, WARA, AzGovViz, ARI) run in a child
+# External PowerShell tools (Maester, PSRule, WARA, AzGovViz, ARI) run in a child
 # pwsh process. That keeps their module state, StrictMode and preference
 # variables away from this script. The Az login is shared through the
 # normal Az context autosave, so no extra sign-in is needed for Az-based tools.
@@ -13,7 +13,8 @@ $script:ToolCatalog = [ordered]@{
     Native   = "Built-in checks (NSG, RBAC, cost, encryption, Key Vault, storage, tagging, Azure Advisor)"
     Prowler  = "Prowler - CIS / NIST / ISO security posture checks for Azure and Entra ID"
     Maester  = "Maester - Entra ID, Conditional Access, EIDSCA and CISA identity tests"
-    AzGovViz = "Azure Governance Visualizer - RBAC, policy, orphaned resources, Defender plans and PSRule (Well-Architected)"
+    PSRule   = "PSRule for Azure - Well-Architected rules (all five pillars) evaluated against the live resource configuration"
+    AzGovViz = "Azure Governance Visualizer - RBAC, policy, orphaned resources and Defender plan coverage"
     WARA     = "Well-Architected Reliability Assessment (Microsoft APRL) - reliability recommendations and retirements"
     ARI      = "Azure Resource Inventory - Excel inventory and network topology diagram (appendix)"
 }
@@ -166,6 +167,10 @@ function Invoke-AuditTools {
                 "Maester" {
                     if (-not $ImportOnly) { Invoke-MaesterScan @common -LogDirectory $logDir -TenantId $TenantId -ToolsPath $ToolsPath -InstallMissing:$InstallMissing }
                     Import-MaesterResults @common
+                }
+                "PSRule" {
+                    if (-not $ImportOnly) { Invoke-PSRuleScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId -InstallMissing:$InstallMissing }
+                    Import-PSRuleResults @common -SubscriptionId $SubscriptionId
                 }
                 "AzGovViz" {
                     if (-not $ImportOnly) { Invoke-AzGovVizScan @common -LogDirectory $logDir -TenantId $TenantId -SubscriptionId $SubscriptionId -ManagementGroupId $ManagementGroupId -ToolsPath $ToolsPath -InstallMissing:$InstallMissing }
