@@ -233,6 +233,7 @@ src/
 |---------|-------------|
 | Tool shows **Not installed** | Run `Install-AuditPrerequisites.ps1`, or rerun with `-InstallMissing` (Prowler needs `pip install prowler`). |
 | **Prowler not found right after installing** | Open a new terminal so the updated PATH is loaded. |
+| **pip: "No such file or directory ... Long Path support"** | Prowler's dependencies exceed 260-character paths. `Install-AuditPrerequisites.ps1` enables `LongPathsEnabled` when run elevated; otherwise set `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1` and rerun. |
 | **WARA failed** | `Start-WARACollector` refuses to run when a newer module exists in PowerShell Gallery – run `Update-Module WARA`. |
 | **PSRule failed** | `Export-AzRuleData` needs Reader on the subscription; see `logs\psrule.log`. Large subscriptions can take a while. |
 | **AzGovViz failed / partial** | Reader on the management group is required. Use `-ManagementGroupId` for a management group you can read, or `-ExcludeTools AzGovViz`. See `logs\azgovviz.log`. |
