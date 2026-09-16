@@ -108,7 +108,7 @@ Checks that cannot run because of missing permissions produce no findings – a 
 
 1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and resolves the subscriptions in scope (see below).
 2. PowerShell-based tools (PSRule, AzGovViz, WARA, ARI) run in a child `pwsh` process and reuse that Az sign-in.
-3. **Maester** signs in to Microsoft Graph interactively (`Connect-Maester`).
+3. **Maester** signs in to Microsoft Graph interactively (`Connect-MgGraph`, the window can open behind other windows) and reuses the Az sign-in for its Azure tests.
 4. **Prowler** reuses `az login` when the Azure CLI is signed in to the same tenant; otherwise it opens a browser sign-in.
 
 ### Choosing subscriptions
@@ -264,11 +264,14 @@ src/
 | **AzGovViz failed / partial** | Reader on the management group is required. Use `-ManagementGroupId` for a management group you can read, or `-ExcludeTools AzGovViz`. See `logs\azgovviz.log`. |
 | **Prowler: `UnicodeEncodeError: 'charmap' codec`** | Fixed in the script (Prowler now runs with UTF-8 output). Update to the latest files. |
 | **AzGovViz: `classicAdministrators ... 404 InvalidResourceType`** | Microsoft retired classic administrators and AzGovViz stops on the error. The script runs a patched copy (`AzGovVizParallel.SimpleAzureAudit.ps1`) that skips that call; the original file is untouched. |
-| **PSRule: "0 rule results written"** | PSRule v3 ignores JSON input files unless the JSON format is enabled. The script enables it and falls back to passing the exported objects directly. |
+| **PSRule: "0 rule results written"** | Reading the export with `-InputPath` returned nothing with PSRule 2.9 and needs extra settings in v3, so the script passes the exported resources to PSRule as objects instead. |
+| **PSRule: "Export-AzRuleData could not read N sub-resource(s)"** | Not fatal. Typically `DefenderForStorageSettings (UnsupportedApiVersion)` per storage account and the retired `classicAdministrators` API; the rest of the export is evaluated. |
 | **Maester: `Connect-MgGraph: Method not found ... InteractiveBrowserCredential`** | Az.Accounts and Microsoft.Graph.Authentication load different Azure.Identity versions. The script now signs in to Graph before Az is loaded. |
 | **ARI: `80040154 Class not registered`** | Excel is not installed, so ARI's COM styling step fails. The script uses `-Lite` automatically when Excel is missing; the Excel inventory is written either way. |
 | **WARA: "No recommendation found for ..."** | Informational – WARA has no rules for that resource type (e.g. WAF policies). The collection still completes. |
 | **Maester has few results** | The account needs Global Reader; Exchange/Teams tests are skipped because only Azure and Graph are connected. |
+| **Maester: "Not connected to Azure" / "Azure tests will be skipped"** | The log line after the Graph sign-in says why the saved Az context could not be used. Run `Connect-AzAccount -Tenant <tenant>` in the same session before the audit. Exchange, Teams, SharePoint, Azure DevOps and GitHub tests are always skipped (not connected). |
+| **AzGovViz: "FAILED: importing previous CSV"** | Informational. AzGovViz compares with a previous run in the same folder; every audit run uses a new folder, so there is nothing to compare with. |
 | **Prowler asks for a browser sign-in** | Run `az login --tenant <tenant>` first to let Prowler reuse the CLI session. |
 | **"Could not fetch Advisor data"** | Install `Az.Advisor` or run with `-SkipAdvisor`. |
 | **Run aborts with a `??` parse error** | Use `pwsh` (PowerShell 7), not Windows PowerShell 5.1. |

@@ -5,7 +5,7 @@
 # CISA/CIS, Azure) in a child process and imports the JSON results.
 #
 # Install: Install-Module Maester, Pester -Scope CurrentUser
-# Auth:    Connect-Maester -Service Azure,Graph (interactive, delegated).
+# Auth:    Connect-MgGraph (interactive, delegated) + the Az context saved by the main script.
 #          Needs a user that can read the directory and Conditional Access policies
 #          (Global Reader is recommended).
 # ─────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ function Invoke-MaesterScan {
     # Microsoft Graph must sign in before anything loads Az.Accounts. Both modules ship
     # Azure.Identity, and whichever loads first wins; with Az.Accounts first, Connect-MgGraph
     # fails with "Method not found: ... InteractiveBrowserCredential.Authenticate". So Graph is
-    # connected explicitly first, and Connect-Maester then only attaches the existing Az context.
+    # connected explicitly first, and the Az context saved by the main script is attached afterwards.
     $script = @"
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop
@@ -42,14 +42,35 @@ if (-not (Get-MgContext)) { throw 'Not connected to Microsoft Graph.' }
 Write-Host "Connected to Microsoft Graph as `$((Get-MgContext).Account)"
 
 `$tests = $(ConvertTo-PSLiteral $testsPath)
+`$stamp = Join-Path `$tests '.simpleazureaudit-updated'
 if (-not (Test-Path (Join-Path `$tests '*'))) {
     New-Item -ItemType Directory -Force -Path `$tests | Out-Null
     Install-MaesterTests -Path `$tests
+    Set-Content -Path `$stamp -Value (Get-Date -Format o)
+} elseif (-not (Test-Path `$stamp) -or (Get-Item `$stamp).LastWriteTime -lt (Get-Date).AddHours(-24)) {
+    try { Update-MaesterTests -Path `$tests; Set-Content -Path `$stamp -Value (Get-Date -Format o) }
+    catch { Write-Host "Could not update Maester tests: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow }
 } else {
-    try { Update-MaesterTests -Path `$tests } catch { Write-Host "Could not update Maester tests: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow }
+    Write-Host 'Maester tests were updated within the last 24 hours - skipping update.'
 }
-try { Connect-Maester -Service Azure -TenantId $(ConvertTo-PSLiteral $TenantId) }
-catch { Write-Host "Azure connection for Maester failed, Azure tests will be skipped: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow }
+
+# Azure tests reuse the Az context saved by the main script. Check it explicitly so the log says
+# why Azure tests are skipped instead of Maester silently reporting 'Not connected to Azure'.
+try {
+    Import-Module Az.Accounts -ErrorAction Stop
+    `$azCtx = Get-AzContext -ErrorAction Stop
+    if (-not `$azCtx) { throw 'no saved Az context was found (Connect-AzAccount)' }
+    if (`$azCtx.Tenant.Id -ne $(ConvertTo-PSLiteral $TenantId)) {
+        `$azCtx = Set-AzContext -Tenant $(ConvertTo-PSLiteral $TenantId) -ErrorAction Stop
+    }
+    `$probe = Invoke-AzRestMethod -Method GET -Path 'subscriptions?api-version=2022-12-01' -ErrorAction Stop
+    if (`$probe.StatusCode -ge 400) { throw "Azure Resource Manager returned HTTP `$(`$probe.StatusCode): `$(`$probe.Content)" }
+    Connect-Maester -Service Azure -TenantId $(ConvertTo-PSLiteral $TenantId)
+    Write-Host "Connected to Azure as `$(`$azCtx.Account.Id)"
+}
+catch {
+    Write-Host "Azure tests will be skipped - Azure connection failed: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow
+}
 Invoke-Maester -Path `$tests -OutputFolder $(ConvertTo-PSLiteral $RawFolder) -OutputFolderFileName 'maester' -NonInteractive -NoLogo -SkipGraphConnect
 "@
 

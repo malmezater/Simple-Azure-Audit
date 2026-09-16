@@ -34,23 +34,29 @@ New-Item -ItemType Directory -Force -Path `$export | Out-Null
 Set-AzContext -Subscription $(ConvertTo-PSLiteral $SubscriptionIds[0]) -Tenant $(ConvertTo-PSLiteral $TenantId) | Out-Null
 
 Write-Host 'Exporting resource configuration (Export-AzRuleData)...'
-Export-AzRuleData -Subscription $(ConvertTo-PSArrayLiteral $SubscriptionIds) -OutputPath `$export | Out-Null
+# Export-AzRuleData warns once per sub-resource it cannot read (e.g. the retired classicAdministrators
+# API, or DefenderForStorageSettings on every storage account). Collect them and print a summary instead.
+`$exportWarnings = @()
+Export-AzRuleData -Subscription $(ConvertTo-PSArrayLiteral $SubscriptionIds) -OutputPath `$export -WarningAction SilentlyContinue -WarningVariable exportWarnings | Out-Null
+if (`$exportWarnings.Count -gt 0) {
+    Write-Host "Export-AzRuleData could not read `$(`$exportWarnings.Count) sub-resource(s) (not fatal):"
+    `$exportWarnings | ForEach-Object {
+        `$m = "`$(`$_.Message)"
+        `$type = if (`$m -match '/providers/(?:.*/providers/)?([^/?]+/[^/?]+)(?:/[^/?]+)?\?') { `$Matches[1] } else { 'other' }
+        `$code = if (`$m -match '"code":"([^"]+)"') { `$Matches[1] } elseif (`$m -match 'status=(\d+)') { "HTTP `$(`$Matches[1])" } else { 'unknown' }
+        "`$type (`$code)"
+    } | Group-Object | Sort-Object Count -Descending | ForEach-Object { Write-Host ("  {0,4} x {1}" -f `$_.Count, `$_.Name) }
+}
 
 `$files = @(Get-ChildItem -Path `$export -Filter '*.json' -File)
 Write-Host "Exported `$(`$files.Count) file(s). PSRule `$((Get-Module PSRule).Version), PSRule.Rules.Azure `$((Get-Module PSRule.Rules.Azure).Version)"
 
+# The exported resources are passed in as objects. Reading the files with -InputPath depends on the
+# PSRule version (v3 needs the JSON format enabled, and 2.9 returned nothing in testing), objects work in both.
 Write-Host 'Evaluating rules (Invoke-PSRule)...'
-# PSRule v3 no longer reads JSON input files unless the JSON format is enabled (all formats are
-# off by default). The environment variable is ignored by v2, which detects the format itself.
-`$env:PSRULE_FORMAT_JSON_ENABLED = 'true'
-`$results = @(Invoke-PSRule -InputPath `$export -Module 'PSRule.Rules.Azure' -Outcome Fail, Pass -WarningAction SilentlyContinue)
-
-if (`$results.Count -eq 0 -and `$files.Count -gt 0) {
-    # Fallback: read the exported resources and pass them in as objects.
-    Write-Host 'No results from -InputPath; evaluating exported objects directly...'
-    `$objects = foreach (`$f in `$files) { Get-Content -Path `$f.FullName -Raw | ConvertFrom-Json -Depth 100 | ForEach-Object { `$_ } }
-    `$results = @(`$objects | Invoke-PSRule -Module 'PSRule.Rules.Azure' -Outcome Fail, Pass -WarningAction SilentlyContinue)
-}
+`$objects = foreach (`$f in `$files) { Get-Content -Path `$f.FullName -Raw | ConvertFrom-Json -Depth 100 | ForEach-Object { `$_ } }
+Write-Host "  `$(@(`$objects).Count) exported resources"
+`$results = @(`$objects | Invoke-PSRule -Module 'PSRule.Rules.Azure' -Outcome Fail, Pass -WarningAction SilentlyContinue)
 
 `$rows = foreach (`$r in `$results) {
     `$ann = `$r.Info.Annotations
