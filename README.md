@@ -110,7 +110,7 @@ Checks that cannot run because of missing permissions produce no findings – a 
                         [-Tools <All|Native|Prowler|Maester|PSRule|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
                         [-ManagementGroupId <string>] [-ToolsPath <string>] [-InstallMissing]
                         [-CustomerName <string>] [-PreparedBy <string>] [-RequiredTags <string>]
-                        [-SkipAdvisor] [-OpenReport] [-ImportFrom <string>]
+                        [-SkipAdvisor] [-OpenReport] [-Zip <Report|Full|None>] [-ImportFrom <string>]
 ```
 
 ### Sign-in
@@ -149,6 +149,7 @@ All selected subscriptions end up in **one** report. The built-in checks run onc
 | `-RequiredTags` | `Environment,Owner,CostCenter` | Tags the tagging check requires. |
 | `-SkipAdvisor` | Off | Skip Azure Advisor in the built-in checks. |
 | `-OpenReport` | Off | Open the report when done. |
+| `-Zip` | `Report` | `Report` zips the HTML, CSV and linked tool reports next to the run folder (`<RunFolder>.zip`). `Full` zips the whole run folder (`<RunFolder>_full.zip`). `None` skips it. |
 | `-ImportFrom` | – | Rebuild the report from an existing run folder without scanning. |
 
 ### Examples
@@ -195,6 +196,7 @@ All selected subscriptions end up in **one** report. The built-in checks run onc
 ## 📊 Output
 
 ```
+AzureAudit_<Subscription | Customer_Nsubs>_<timestamp>.zip    # Report to share (-Zip Report, default)
 AzureAudit_<Subscription | Customer_Nsubs>_<timestamp>/
 ├── AzureAudit_<Subscription>_<timestamp>.html   # Interactive report (self-contained)
 ├── AzureAudit_<Subscription>_<timestamp>.csv    # All findings, semicolon-separated, UTF-8
@@ -210,6 +212,17 @@ AzureAudit_<Subscription | Customer_Nsubs>_<timestamp>/
     ├── wara/       WARA-File-*.json, recommendations.json
     └── ari/        *.xlsx, *.xml (draw.io)
 ```
+
+### Sharing the report
+
+Share the **zip**, not the run folder. The run folder holds all raw tool output (often several hundred MB and thousands of files), which is only needed to rebuild the report with `-ImportFrom`.
+
+| Zip | Contains | Use |
+|-----|----------|-----|
+| `<RunFolder>.zip` (`-Zip Report`, default) | HTML report, CSV, `audit-data.json`, and the tool reports linked from the report: Prowler HTML/CSV, Maester HTML/Markdown, AzGovViz HTML, PSRule and WARA JSON, ARI Excel and draw.io diagram. | Send to the customer, upload to OneDrive/SharePoint. Unzip and open the HTML – the links to the tool reports work. |
+| `<RunFolder>_full.zip` (`-Zip Full`) | The whole run folder including raw data and logs. | Archive, or move the run to another machine and rebuild with `-ImportFrom`. |
+
+To zip an older run, rebuild it: `.\Invoke-AzureAudit.ps1 -ImportFrom "<RunFolder>" -Zip Report`.
 
 ### CSV columns
 
@@ -286,7 +299,8 @@ src/
 | **"Could not fetch Advisor data"** | Install `Az.Advisor` or run with `-SkipAdvisor`. |
 | **Run aborts with a `??` parse error** | Use `pwsh` (PowerShell 7), not Windows PowerShell 5.1. |
 | **Garbled characters (å/ä/ö, box drawing)** | Keep the `.ps1` files saved as UTF-8 with BOM. |
-| **Report links to raw reports don't open** | Keep the run folder intact – links are relative to the HTML file. |
+| **Report links to raw reports don't open** | Keep the run folder intact, or unzip the report zip – links are relative to the HTML file. |
+| **OneDrive/SharePoint: "has no content" / thousands of files not uploaded** | The run folder contains raw tool output that cloud sync handles badly (empty files, very many files). Upload the report zip instead. Runs created before this version also include AzGovViz's JSON export (thousands of GUID-named files); it is now turned off with `-NoJsonExport`. |
 
 ---
 

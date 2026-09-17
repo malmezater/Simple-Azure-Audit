@@ -95,6 +95,8 @@ function Invoke-AzGovVizScan {
     $runScript = Get-AzGovVizPatchedScript -ScriptPath $scriptPath
 
     # -NoALZPolicyVersionChecker: that feature needs git (to clone Enterprise-Scale) and is not used here.
+    # -NoJsonExport: the JSON export writes one file per policy/role definition (thousands of small files,
+    #  many of them empty), which the import does not use and which cloud sync (OneDrive/SharePoint) rejects.
     $script = @"
 & $(ConvertTo-PSLiteral $runScript) ``
     -ManagementGroupId $(ConvertTo-PSLiteral $ManagementGroupId) ``
@@ -104,6 +106,7 @@ function Invoke-AzGovVizScan {
     -OutputPath $(ConvertTo-PSLiteral $RawFolder) ``
     -NoPIMEligibility ``
     -NoALZPolicyVersionChecker ``
+    -NoJsonExport ``
     -StatsOptOut
 "@
 

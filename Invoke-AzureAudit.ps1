@@ -86,6 +86,12 @@
 .PARAMETER OpenReport
     Open the HTML report automatically in the browser after the run.
 
+.PARAMETER Zip
+    Zip the result next to the run folder so it is easy to move or share.
+      Report (default)  HTML, CSV, audit-data.json and the tool reports the HTML links to  -> <RunFolder>.zip
+      Full              The whole run folder, including raw data and logs              -> <RunFolder>_full.zip
+      None              No zip
+
 .EXAMPLE
     .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -SubscriptionId "xxxxxxxx-..." -OutputPath "C:\Temp\AuditReports" -InstallMissing
 
@@ -124,7 +130,9 @@ param(
     [string]   $PreparedBy,
     [switch]   $InstallMissing,
     [switch]   $SkipAdvisor,
-    [switch]   $OpenReport
+    [switch]   $OpenReport,
+    [ValidateSet("Report","Full","None")]
+    [string]   $Zip           = "Report"
 )
 
 Set-StrictMode -Version Latest
@@ -385,6 +393,16 @@ $reportParams = @{
 if ($generatedAt) { $reportParams.GeneratedAt = $generatedAt }
 New-AuditReport @reportParams
 
+$zipFile = $null
+if ($Zip -ne "None") {
+    try {
+        $zipFile = New-AuditReportPackage -RunFolder $runFolder -ReportFiles @($htmlPath, $csvPath, $dataPath) -ToolRuns $toolRuns -Mode $Zip
+    }
+    catch {
+        Write-Step "  Could not create the zip: $($_.Exception.Message)" "DarkYellow"
+    }
+}
+
 # ─────────────────────────────────────────────────────────────
 # SUMMARY
 # ─────────────────────────────────────────────────────────────
@@ -420,6 +438,9 @@ Write-Host @"
   CSV    : $(Split-Path $csvPath -Leaf)
   Folder : $runFolder
 "@ -ForegroundColor Cyan
+if ($zipFile) {
+    Write-Host "  Zip    : $($zipFile.FullName) ($([math]::Round($zipFile.Length / 1MB, 1)) MB) - share this file" -ForegroundColor Cyan
+}
 
 if ($OpenReport) {
     Write-Host "`n  Opening report in the browser..." -ForegroundColor Green
