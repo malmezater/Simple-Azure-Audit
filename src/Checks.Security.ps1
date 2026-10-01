@@ -1,6 +1,7 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Security.ps1
-# Security checks: NSG rules, orphaned Public IPs, RBAC/Owner, classic admins.
+# Security checks: NSG rules, orphaned Public IPs, RBAC/Owner, privileged roles on users,
+# storage shared key access, classic admins.
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-SecurityChecks {
@@ -73,6 +74,49 @@ function Invoke-SecurityChecks {
             -ResourceType "RBAC" `
             -Finding "$($ownerAssignments.Count) Owner roles at subscription scope (recommended <=3)" `
             -Recommendation "Follow the principle of least privilege. Use Contributor/Reader where Owner is not required."
+    }
+
+    # RBAC - privileged roles assigned directly to users (not via a group or a PIM activation)
+    # Inherited management group assignments are left out so they are not repeated per subscription.
+    $privilegedRoles = @{ "Owner" = "High"; "User Access Administrator" = "High"; "Role Based Access Control Administrator" = "High"; "Contributor" = "Medium" }
+    $pimActivated = @{}
+    try {
+        foreach ($i in @(Get-AzRoleAssignmentScheduleInstance -Scope "/subscriptions/$SubscriptionId" -ErrorAction Stop |
+                         Where-Object { $_.AssignmentType -eq "Activated" })) {
+            $pimActivated["$($i.PrincipalId)|$(("$($i.RoleDefinitionId)" -split '/')[-1])|$($i.Scope)".ToLower()] = $true
+        }
+    } catch { }
+    $directUsers = @(Get-AzRoleAssignment | Where-Object {
+        $_.ObjectType -eq "User" -and $privilegedRoles.ContainsKey($_.RoleDefinitionName) -and
+        $_.Scope -like "/subscriptions/$SubscriptionId*" -and
+        -not $pimActivated.ContainsKey("$($_.ObjectId)|$($_.RoleDefinitionId)|$($_.Scope)".ToLower())
+    })
+    foreach ($ra in $directUsers) {
+        $who = if ($ra.SignInName) { $ra.SignInName } elseif ($ra.DisplayName) { $ra.DisplayName } else { $ra.ObjectId }
+        $scopeText = if ($ra.Scope -eq "/subscriptions/$SubscriptionId") { "subscription $SubscriptionName" } else { $ra.Scope }
+        Add-Finding -Category "Identity" -Severity $privilegedRoles[$ra.RoleDefinitionName] `
+            -CheckId "NATIVE-SEC-006" -Title "Privileged role assigned permanently and directly to a user" `
+            -Resource "$who > $($ra.RoleDefinitionName)" `
+            -ResourceId $ra.Scope `
+            -ResourceType "RBAC" `
+            -Finding "$who has a permanent, direct '$($ra.RoleDefinitionName)' assignment on $scopeText" `
+            -Recommendation "Assign privileged roles to Entra ID groups and make them eligible through Privileged Identity Management (just-in-time, approval, time limit), so no user holds standing Owner/Contributor access."
+    }
+    Write-Step "  $($directUsers.Count) permanent privileged role assignment(s) directly on users." "Gray"
+
+    # Storage - shared key (account key / SAS) authorization
+    Write-Step "Checking Storage shared key access..."
+    foreach ($sa in @(Get-AzStorageAccount)) {
+        # $null means the setting was never changed, and then shared key access is allowed
+        if ($sa.AllowSharedKeyAccess -ne $false) {
+            Add-Finding -Category "Security" -Severity "Medium" `
+                -CheckId "NATIVE-SEC-005" -Title "Storage account allows shared key access" `
+                -Resource $sa.StorageAccountName `
+                -ResourceId $sa.Id `
+                -ResourceType "Storage Account" `
+                -Finding "Shared key authorization is allowed: anyone with an account key or a SAS signed with it has full access, and key use is not tied to an identity" `
+                -Recommendation "Use Entra ID (RBAC) and managed identities for data access and set AllowSharedKeyAccess to false. Check first that nothing still uses the keys (e.g. AzureWebJobsStorage connection strings, SMB file shares, older tools)."
+        }
     }
 
     # Classic administrators (legacy)

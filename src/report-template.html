@@ -178,6 +178,45 @@ details.issue summary:hover{background:var(--surface-2);border-radius:var(--radi
 .more{display:flex;justify-content:center;margin-top:12px}
 .empty{padding:40px;text-align:center;color:var(--muted)}
 
+/* Vulnerability chips */
+.vchips{display:flex;flex-wrap:wrap;gap:4px}
+a.chip:hover{text-decoration:none;border-color:var(--border-strong);color:var(--ink)}
+.chip.kev{border-color:var(--critical);color:var(--critical);background:transparent;font-weight:600}
+.links{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px}
+
+/* Action plan */
+.phase-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px}
+@media (max-width:900px){.phase-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.phase-tiles{grid-template-columns:1fr}}
+.phase-tile{padding:14px 16px;text-align:left;cursor:pointer;border:1px solid var(--border);background:var(--surface);border-radius:var(--radius)}
+.phase-tile:hover{border-color:var(--border-strong);background:var(--surface-2)}
+.phase-tile .p-step{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.phase-tile .p-name{font-weight:650;margin-top:2px}
+.phase-tile .p-value{font-size:24px;font-weight:650;margin-top:6px;line-height:1.1}
+.phase-tile .p-sub{font-size:12px;color:var(--muted)}
+.phase{margin:0 0 28px}
+.phase-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.phase-head h2{font-size:18px;margin:0;font-weight:650}
+.phase-head .tf{color:var(--ink-2);font-size:13px}
+.phase-goal{color:var(--ink-2);margin:0 0 12px;max-width:860px}
+details.ws{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px}
+details.ws[open]{border-color:var(--border-strong)}
+details.ws summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px 16px}
+details.ws summary::-webkit-details-marker{display:none}
+details.ws summary:hover{background:var(--surface-2);border-radius:var(--radius)}
+.ws-num{font-weight:650;color:var(--muted);font-variant-numeric:tabular-nums}
+.ws-title{font-weight:600}
+.ws-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.ws-count{text-align:right;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.sevmix{display:inline-flex;gap:2px;height:8px;width:90px;margin-top:4px}
+.sevmix span{height:100%}
+.ws-body{padding:0 16px 16px 72px}
+@media (max-width:640px){details.ws summary{grid-template-columns:32px 1fr}.ws-count{grid-column:2}.ws-body{padding:0 16px 16px}}
+.ws-body h3{font-size:13px;margin:12px 0 4px;color:var(--ink)}
+.ws-body p,.ws-body ol{margin:0 0 8px;color:var(--ink-2);max-width:860px}
+.ws-body ol{padding-left:20px}
+.ws-body li{margin-bottom:4px}
+
 /* Method */
 .prose{max-width:860px;color:var(--ink-2)}
 .prose h3{color:var(--ink);font-size:14px;margin:18px 0 6px}
@@ -192,6 +231,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   section:first-of-type{break-before:auto}
   .card,details.issue{break-inside:avoid;box-shadow:none}
   details.issue .issue-body{display:none}
+  details.ws{break-inside:auto}
   .bar-seg,.swatch,.meter>div,.status i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
@@ -217,8 +257,10 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
 <nav class="tabs" aria-label="Report sections">
   <div class="wrap" role="tablist">
     <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false">Action plan</button>
     <button class="tab" role="tab" data-tab="findings" aria-selected="false">Findings<span class="count" id="tab-count-findings"></span></button>
     <button class="tab" role="tab" data-tab="resources" aria-selected="false">Resources<span class="count" id="tab-count-resources"></span></button>
+    <button class="tab" role="tab" data-tab="vulns" aria-selected="false">Vulnerabilities<span class="count" id="tab-count-vulns"></span></button>
     <button class="tab" role="tab" data-tab="tools" aria-selected="false">Tools &amp; method</button>
   </div>
 </nav>
@@ -287,7 +329,10 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
           <h2>Top priorities</h2>
           <p class="sub">The most severe issues, ordered by severity and number of affected resources.</p>
         </div>
-        <button class="btn no-print" type="button" id="btn-all-findings">All findings →</button>
+        <div class="head-actions no-print">
+          <button class="btn" type="button" id="btn-plan">Action plan →</button>
+          <button class="btn" type="button" id="btn-all-findings">All findings →</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table>
@@ -296,6 +341,21 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
         </table>
       </div>
     </div>
+  </section>
+
+  <!-- ─────────────── ACTION PLAN ─────────────── -->
+  <section id="tab-plan" aria-label="Action plan" hidden>
+    <div class="card card-pad" style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <h2>Recommended action plan</h2>
+          <p class="sub" style="max-width:860px">Every issue is placed in a workstream (what to do, why and how) and a phase (when). Phase 1 holds critical issues, vulnerabilities known to be exploited and high-risk exposure to the Internet. Within a phase, workstreams are ordered by risk. Open a workstream to see why it matters, how to do it and the issues it covers; select an issue to see the affected resources.</p>
+        </div>
+        <button class="btn no-print" type="button" id="btn-plan-csv">Download plan (CSV)</button>
+      </div>
+      <div class="phase-tiles" id="phase-tiles" style="margin-bottom:0"></div>
+    </div>
+    <div id="plan-view"></div>
   </section>
 
   <!-- ─────────────── FINDINGS ─────────────── -->
@@ -330,6 +390,44 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       </div>
     </div>
     <div class="more" id="r-more"></div>
+  </section>
+
+  <!-- ─────────────── VULNERABILITIES ─────────────── -->
+  <section id="tab-vulns" aria-label="Vulnerabilities" hidden>
+    <div class="card card-pad" style="margin-bottom:16px">
+      <div class="card-head">
+        <div>
+          <h2>Known vulnerabilities</h2>
+          <p class="sub" id="vuln-status" style="max-width:860px"></p>
+        </div>
+      </div>
+      <div class="phase-tiles" id="vuln-tiles" style="margin-bottom:0"></div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Vulnerability</th><th>Description</th><th style="width:110px">Severity</th><th class="num">CVSS</th><th class="num">Resources</th><th>Sources</th><th>Look it up</th></tr></thead>
+          <tbody id="vuln-rows"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card card-pad prose">
+      <h2>About the vulnerability sources</h2>
+      <h3>CVE – Common Vulnerabilities and Exposures</h3>
+      <p>A CVE ID (for example <span class="mono">CVE-2024-12345</span>) is the global name for one publicly known vulnerability. IDs are assigned by CVE Numbering Authorities such as Microsoft, Red Hat or GitHub, and the list is run by MITRE for the US government. <a href="https://www.cve.org/" target="_blank" rel="noopener noreferrer">cve.org</a> holds the official record: a short description and references.</p>
+      <h3>NVD – National Vulnerability Database</h3>
+      <p>NIST's <a href="https://nvd.nist.gov/" target="_blank" rel="noopener noreferrer">NVD</a> adds analysis to each CVE: the <strong>CVSS</strong> score, the affected products (CPE) and the weakness type (CWE). CVSS v3 rates severity from 0 to 10: <strong>9.0–10 Critical</strong>, 7.0–8.9 High, 4.0–6.9 Medium, 0.1–3.9 Low. CVSS describes how bad a vulnerability <em>can</em> be, not how likely it is to be used against you.</p>
+      <h3>CISA KEV – Known Exploited Vulnerabilities</h3>
+      <p>The US Cybersecurity and Infrastructure Security Agency keeps the <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" rel="noopener noreferrer">KEV catalogue</a>: vulnerabilities with reliable evidence of exploitation in real attacks, each with a required action and a due date for US federal agencies. A CVE on this list is the strongest signal for priority; this report marks it <span class="chip kev">Known exploited</span> and puts it in phase 1 of the action plan. "Ransomware" means the CVE is known to be used in ransomware campaigns.</p>
+      <h3>EPSS – Exploit Prediction Scoring System</h3>
+      <p><a href="https://www.first.org/epss/" target="_blank" rel="noopener noreferrer">EPSS</a> from FIRST estimates the probability that a CVE will be exploited in the next 30 days. It complements CVSS and KEV when many vulnerabilities have the same severity.</p>
+      <h3>Microsoft Security Response Center (MSRC)</h3>
+      <p>For Microsoft products, the <a href="https://msrc.microsoft.com/update-guide" target="_blank" rel="noopener noreferrer">Security Update Guide</a> lists the security update (KB) that fixes each CVE, the affected versions and Microsoft's own exploitability assessment. The MSRC link only has content for Microsoft CVEs.</p>
+      <h3>GitHub Advisory Database (GHSA)</h3>
+      <p><a href="https://github.com/advisories" target="_blank" rel="noopener noreferrer">GHSA IDs</a> describe vulnerabilities in open-source packages (npm, NuGet, PyPI, Maven …). Most are also linked to a CVE.</p>
+      <h3>Where the vulnerabilities in this report come from</h3>
+      <p>Vulnerabilities in installed software are reported by <strong>Microsoft Defender for Cloud</strong>: Defender for Servers (Microsoft Defender Vulnerability Management) for VMs and Arc servers, Defender for Containers for images in Azure Container Registry, and SQL vulnerability assessment. The other tools in this report check configuration, not installed software, so they rarely mention CVEs. Any CVE or GHSA ID they do mention is picked up and shown here as well. If Defender's vulnerability assessment is not enabled, an empty list does <strong>not</strong> mean the environment has no vulnerabilities.</p>
+    </div>
   </section>
 
   <!-- ─────────────── TOOLS & METHOD ─────────────── -->
@@ -378,10 +476,15 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       checkId: f.CheckId || "", title: f.Title || f.Finding || "", resource: f.Resource || "",
       resourceType: f.ResourceType || "", resourceId: f.ResourceId || "", subscriptionId: f.SubscriptionId || "", subscriptionName: f.SubscriptionName || "",
       finding: f.Finding || "", recommendation: f.Recommendation || "", reference: f.Reference || "",
-      frameworks: f.Frameworks || ""
+      frameworks: f.Frameworks || "",
+      vulns: (f.Vulnerabilities || "").split(/\s*,\s*/).filter(Boolean)
     };
   });
   var TOOLS = DATA.tools || [];
+  var VULNS = DATA.vulnerabilities || [];
+  var VULN_SCAN = DATA.vulnerabilityScan || null;
+  var PLAN = DATA.plan || { phases: [], workstreams: [], items: [] };
+  var KEV = VULNS.reduce(function (m, v) { if (v.KnownExploited) m[v.Id] = v; return m; }, {});
   var SUBSCRIPTIONS = META.subscriptions || [];
   var MULTI_SUB = SUBSCRIPTIONS.length > 1;
 
@@ -418,6 +521,34 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   function plural(n, one, many) { return fmt(n) + " " + (n === 1 ? one : (many || one + "s")); }
   function safeUrl(u) { return /^https?:\/\//i.test(u) ? u : null; }
   function sevPill(sev) { return el("span", { class: "sev" }, [el("span", { class: "swatch sw-" + sev, "aria-hidden": "true" }), sev]); }
+  function extLink(href, text, cls) { return el("a", { href: href, target: "_blank", rel: "noopener noreferrer", class: cls || null, text: text }); }
+
+  // ── Vulnerability references ────────────────────────────
+  function isCve(id) { return /^CVE-/i.test(id); }
+  function vulnUrl(id) { return isCve(id) ? "https://nvd.nist.gov/vuln/detail/" + encodeURIComponent(id) : "https://github.com/advisories/" + encodeURIComponent(id); }
+  function vulnLinks(id) {
+    var e = encodeURIComponent(id);
+    if (!isCve(id)) return [["GitHub Advisory", "https://github.com/advisories/" + e]];
+    var links = [["NVD", "https://nvd.nist.gov/vuln/detail/" + e], ["CVE.org", "https://www.cve.org/CVERecord?id=" + e],
+                 ["MSRC", "https://msrc.microsoft.com/update-guide/vulnerability/" + e]];
+    if (KEV[id]) links.push(["CISA KEV", "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?search_api_fulltext=" + e]);
+    return links;
+  }
+  function kevChip(id) {
+    var k = KEV[id];
+    if (!k) return null;
+    var t = "On the CISA Known Exploited Vulnerabilities list" + (k.KevDateAdded ? " since " + k.KevDateAdded : "") +
+            (k.KevRansomware ? ". Known to be used in ransomware campaigns." : ".");
+    return el("span", { class: "chip kev", title: t, text: k.KevRansomware ? "Known exploited · ransomware" : "Known exploited" });
+  }
+  function vulnChips(ids, max) {
+    var box = el("span", { class: "vchips" });
+    ids.slice(0, max || ids.length).forEach(function (id) {
+      box.appendChild(extLink(vulnUrl(id), id, "chip mono" + (KEV[id] ? " kev" : "")));
+    });
+    if (max && ids.length > max) box.appendChild(el("span", { class: "chip", text: "+" + (ids.length - max) }));
+    return box;
+  }
 
   // ── Grouping ────────────────────────────────────────────
   function resourceKey(f) { return (f.resourceId || f.resource || "(tenant)").toLowerCase(); }
@@ -430,15 +561,19 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       if (!g) {
         g = map[key] = { key: key, title: f.title, source: f.source, category: f.category, severity: f.severity,
           recommendation: f.recommendation, reference: f.reference, frameworks: f.frameworks, checkId: f.checkId,
-          items: [], resources: {} };
+          items: [], resources: {}, vulnSet: {} };
         order.push(g);
       }
       if (sevIndex(f.severity) < sevIndex(g.severity)) g.severity = f.severity;
       if (!g.reference && f.reference) g.reference = f.reference;
       g.items.push(f);
       g.resources[resourceKey(f)] = true;
+      f.vulns.forEach(function (v) { g.vulnSet[v] = true; });
     });
-    order.forEach(function (g) { g.resourceCount = Object.keys(g.resources).length; });
+    order.forEach(function (g) {
+      g.resourceCount = Object.keys(g.resources).length;
+      g.vulns = Object.keys(g.vulnSet).sort(function (a, b) { return (KEV[b] ? 1 : 0) - (KEV[a] ? 1 : 0) || a.localeCompare(b); });
+    });
     order.sort(function (a, b) {
       return sevIndex(a.severity) - sevIndex(b.severity) || b.resourceCount - a.resourceCount || a.title.localeCompare(b.title);
     });
@@ -500,7 +635,9 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
     document.getElementById("hero-note").textContent =
       "Critical and high severity issues, out of " + plural(ALL_ISSUES.length, "issue") + " in total.";
     var verdict;
-    if (critical > 0) verdict = plural(critical, "critical issue") + " should be handled immediately. Start with Top priorities below.";
+    var kevCount = VULNS.filter(function (v) { return v.KnownExploited; }).length;
+    if (kevCount > 0) verdict = plural(kevCount, "vulnerability", "vulnerabilities") + " known to be exploited in real attacks " + (kevCount === 1 ? "was" : "were") + " found. Start with phase 1 of the Action plan.";
+    else if (critical > 0) verdict = plural(critical, "critical issue") + " should be handled immediately. Start with phase 1 of the Action plan.";
     else if (actionable.length > 0) verdict = "No critical issues. Plan the high severity issues into the next few weeks.";
     else if (ALL_ISSUES.length > 0) verdict = "No critical or high severity issues. Remaining items are improvements and hygiene.";
     else verdict = "No failed checks were reported by the tools that ran.";
@@ -728,7 +865,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       if (state.sub && (f.subscriptionName || "Tenant") !== state.sub) return false;
       if (q) {
         var hay = (f.title + " " + f.resource + " " + f.resourceId + " " + f.resourceType + " " + f.finding + " " +
-          f.recommendation + " " + f.checkId + " " + f.frameworks + " " + f.subscriptionName).toLowerCase();
+          f.recommendation + " " + f.checkId + " " + f.frameworks + " " + f.subscriptionName + " " + f.vulns.join(" ")).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
@@ -803,6 +940,15 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       var url = safeUrl(g.reference);
       row("Reference", url ? el("a", { href: url, target: "_blank", rel: "noopener noreferrer", text: url }) : null);
       row("Frameworks", g.frameworks ? el("span", { text: g.frameworks }) : null);
+      if (g.vulns.length) {
+        var vbox = el("div", { style: "display:grid;gap:6px" });
+        g.vulns.slice(0, 20).forEach(function (id) {
+          vbox.appendChild(el("div", { class: "links" }, [el("span", { class: "mono", style: "font-weight:600", text: id }), kevChip(id)]
+            .concat(vulnLinks(id).map(function (l) { return extLink(l[1], l[0]); }))));
+        });
+        if (g.vulns.length > 20) vbox.appendChild(el("div", { class: "muted", text: "+" + (g.vulns.length - 20) + " more – see the Vulnerabilities tab." }));
+        row("Vulnerabilities", vbox);
+      }
       row("Check ID", g.checkId ? el("span", { class: "mono", text: g.checkId }) : null);
       body.appendChild(kv);
 
@@ -829,7 +975,8 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
         el("div", { class: "issue-sev" }, [sevPill(g.severity)]),
         el("div", {}, [
           el("div", { class: "issue-title", text: g.title }),
-          el("div", { class: "issue-tags" }, [el("span", { class: "chip", text: g.category }), el("span", { class: "chip", text: sourceLabel(g.source) })])
+          el("div", { class: "issue-tags" }, [el("span", { class: "chip", text: g.category }), el("span", { class: "chip", text: sourceLabel(g.source) }),
+            g.vulns.some(function (v) { return KEV[v]; }) ? el("span", { class: "chip kev", text: "Known exploited" }) : null])
         ]),
         el("div", { class: "issue-count" }, [plural(g.resourceCount, "resource")])
       ]),
@@ -884,6 +1031,142 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
     if (!rows.length) body.appendChild(el("tr", {}, [el("td", { colspan: "5", class: "muted", text: "No resources match." })]));
   }
 
+  // ── Action plan tab ─────────────────────────────────────
+  var WS = (PLAN.workstreams || []).reduce(function (m, w) { m[w.id] = w; return m; }, {});
+  var PHASES = (PLAN.phases || []).reduce(function (m, p) { m[p.id] = p; return m; }, {});
+  var PLAN_ITEMS = PLAN.items || [];
+
+  function renderPlan() {
+    var tiles = clear(document.getElementById("phase-tiles"));
+    var view = clear(document.getElementById("plan-view"));
+    if (!PLAN_ITEMS.length) {
+      view.appendChild(el("div", { class: "card empty", text: "Nothing to plan – the tools that ran reported no failed checks." }));
+      return;
+    }
+    (PLAN.phases || []).forEach(function (p, pi) {
+      var items = PLAN_ITEMS.filter(function (i) { return i.Phase === p.id; });
+      var groups = [], byWs = {};
+      items.forEach(function (i) {
+        var g = byWs[i.Workstream];
+        if (!g) { g = byWs[i.Workstream] = { ws: WS[i.Workstream] || { name: i.Workstream, how: [] }, items: [] }; groups.push(g); }
+        g.items.push(i);
+      });
+      tiles.appendChild(el("button", { class: "phase-tile", type: "button", disabled: !items.length,
+        onclick: function () { var t = document.getElementById("phase-" + p.id); if (t) t.scrollIntoView({ behavior: "smooth" }); } }, [
+        el("div", { class: "p-step", text: p.timeframe }),
+        el("div", { class: "p-name", text: p.name }),
+        el("div", { class: "p-value", text: fmt(items.length) }),
+        el("div", { class: "p-sub", text: (items.length === 1 ? "issue" : "issues") + " in " + plural(groups.length, "workstream") })
+      ]));
+      if (!items.length) return;
+
+      var sec = el("div", { class: "phase", id: "phase-" + p.id }, [
+        el("div", { class: "phase-head" }, [el("h2", { text: p.name }), el("span", { class: "tf", text: p.timeframe + " · " + plural(items.length, "issue") })]),
+        el("p", { class: "phase-goal", text: p.goal })
+      ]);
+      groups.forEach(function (g, gi) { sec.appendChild(workstreamCard(g, (pi + 1) + "." + (gi + 1), pi === 0 && gi === 0)); });
+      view.appendChild(sec);
+    });
+  }
+
+  function workstreamCard(g, num, open) {
+    var w = g.ws, bySev = {}, kev = false;
+    g.items.forEach(function (i) { bySev[i.Severity] = (bySev[i.Severity] || 0) + 1; if (i.KnownExploited) kev = true; });
+    var mix = el("span", { class: "sevmix", "aria-hidden": "true" });
+    SEVERITIES.forEach(function (s) { if (bySev[s]) mix.appendChild(el("span", { class: "sw-" + s, style: "flex:" + bySev[s] + " 1 0" })); });
+
+    var tbody = el("tbody");
+    g.items.forEach(function (i) {
+      var open = function () { openFindings({ issue: i.Key }); };
+      var ids = (i.Vulnerabilities || "").split(/\s*,\s*/).filter(Boolean);
+      tbody.appendChild(el("tr", { class: "clickable", tabindex: "0", onclick: function (e) { if (!e.target.closest("a")) open(); },
+        onkeydown: function (e) { if (e.key === "Enter") open(); } }, [
+        el("td", {}, [sevPill(i.Severity)]),
+        el("td", {}, [el("div", { style: "font-weight:600", text: i.Title }), i.Recommendation ? el("div", { class: "muted clamp", style: "font-size:12.5px", text: i.Recommendation }) : null,
+          ids.length ? el("div", { style: "margin-top:4px" }, [vulnChips(ids, 3)]) : null]),
+        el("td", { class: "muted", text: sourceLabel(i.Source) }),
+        el("td", { class: "num", text: fmt(i.Resources) })
+      ]));
+    });
+
+    var body = el("div", { class: "ws-body" }, [
+      el("h3", { text: "Why" }), el("p", { text: w.why || "" }),
+      el("h3", { text: "How" }), el("ol", {}, (w.how || []).map(function (s) { return el("li", { text: s }); })),
+      el("h3", { text: "Issues" }),
+      el("div", { class: "table-wrap" }, [el("table", {}, [
+        el("thead", {}, [el("tr", {}, [el("th", { style: "width:110px", text: "Severity" }), el("th", { text: "Issue and recommendation" }), el("th", { text: "Source" }), el("th", { class: "num", text: "Resources" })])]),
+        tbody
+      ])])
+    ]);
+    var d = el("details", { class: "ws" }, [
+      el("summary", {}, [
+        el("div", { class: "ws-num", text: num }),
+        el("div", {}, [
+          el("div", { class: "ws-title", text: w.name }),
+          el("div", { class: "ws-meta" }, [el("span", { class: "chip", text: "Effort: " + (w.effort || "–") }), el("span", { class: "chip", text: "Owner: " + (w.owner || "–") }),
+            kev ? el("span", { class: "chip kev", text: "Known exploited" }) : null])
+        ]),
+        el("div", { class: "ws-count" }, [plural(g.items.length, "issue"), el("div", {}, [mix])])
+      ]),
+      body
+    ]);
+    if (open) d.open = true;
+    return d;
+  }
+
+  function exportPlanCsv() {
+    var rows = PLAN_ITEMS.map(function (i, n) {
+      var w = WS[i.Workstream] || {}, p = PHASES[i.Phase] || {};
+      return { order: n + 1, phase: p.name, timeframe: p.timeframe, workstream: w.name, owner: w.owner, effort: w.effort,
+        severity: i.Severity, issue: i.Title, area: i.Category, source: sourceLabel(i.Source), checkId: i.CheckId,
+        resources: i.Resources, findings: i.Findings, kev: i.KnownExploited ? "Yes" : "", vulns: i.Vulnerabilities,
+        recommendation: i.Recommendation, why: w.why, how: (w.how || []).join(" | ") };
+    });
+    downloadCsv(["Order", "Phase", "Timeframe", "Workstream", "Owner", "Effort", "Severity", "Issue", "Area", "Source", "CheckId", "Resources", "Findings", "KnownExploited", "Vulnerabilities", "Recommendation", "Why", "How"],
+      ["order", "phase", "timeframe", "workstream", "owner", "effort", "severity", "issue", "area", "source", "checkId", "resources", "findings", "kev", "vulns", "recommendation", "why", "how"],
+      rows, "-action-plan.csv");
+  }
+
+  // ── Vulnerabilities tab ─────────────────────────────────
+  function renderVulns() {
+    document.getElementById("tab-count-vulns").textContent = VULNS.length ? fmt(VULNS.length) : "";
+    var msg = VULN_SCAN && VULN_SCAN.Message ? VULN_SCAN.Message : "Defender for Cloud was not read in this run (the built-in checks did not run).";
+    if (VULNS.length && !VULNS[0].KevChecked) msg += " The CISA KEV catalogue was not checked (offline or unavailable), so known exploitation is not marked.";
+    document.getElementById("vuln-status").textContent = msg;
+
+    var affected = {};
+    FINDINGS.forEach(function (f) { if (f.vulns.length) affected[resourceKey(f)] = 1; });
+    var tiles = clear(document.getElementById("vuln-tiles"));
+    [
+      ["Unique vulnerabilities", VULNS.length, "CVE and GHSA IDs"],
+      ["Known exploited", VULNS.filter(function (v) { return v.KnownExploited; }).length, "on the CISA KEV list"],
+      ["Critical", VULNS.filter(function (v) { return v.Severity === "Critical" || v.Cvss >= 9; }).length, "CVSS 9.0 or higher"],
+      ["Affected resources", Object.keys(affected).length, "with at least one vulnerability"]
+    ].forEach(function (t) {
+      tiles.appendChild(el("div", { class: "card fact" }, [el("div", { class: "t-label", text: t[0] }), el("div", { class: "t-value", text: fmt(t[1]) }), el("div", { class: "t-sub muted", style: "font-size:12px", text: t[2] })]));
+    });
+
+    var body = clear(document.getElementById("vuln-rows"));
+    if (!VULNS.length) {
+      body.appendChild(el("tr", {}, [el("td", { colspan: "7", class: "muted", text: "No CVE or GHSA IDs were found in any finding." })]));
+      return;
+    }
+    VULNS.forEach(function (v) {
+      var open = function () { openFindings({ q: v.Id.toLowerCase() }); };
+      body.appendChild(el("tr", { class: "clickable", tabindex: "0", onclick: function (e) { if (!e.target.closest("a")) open(); },
+        onkeydown: function (e) { if (e.key === "Enter") open(); } }, [
+        el("td", {}, [el("div", { class: "mono", style: "font-weight:600", text: v.Id }), el("div", { style: "margin-top:4px" }, [kevChip(v.Id)]),
+          v.KevDueDate ? el("div", { class: "muted", style: "font-size:12px", text: "CISA due date " + v.KevDueDate }) : null]),
+        el("td", {}, [el("div", { class: "clamp", text: v.KevName || v.Title || "" }), v.KevRequiredAction ? el("div", { class: "muted clamp", style: "font-size:12px", text: "CISA: " + v.KevRequiredAction }) : null]),
+        el("td", {}, [sevPill(v.Severity)]),
+        el("td", { class: "num", text: v.Cvss > 0 ? String(v.Cvss) : "–" }),
+        el("td", { class: "num", text: fmt(v.Resources) }),
+        el("td", {}, (v.Sources || []).map(function (s) { return el("span", { class: "chip", style: "margin:0 4px 4px 0", text: sourceLabel(s) }); })),
+        el("td", {}, [el("div", { class: "links" }, vulnLinks(v.Id).map(function (l) { return extLink(l[1], l[0]); }))])
+      ]));
+    });
+  }
+
   // ── Tools tab ───────────────────────────────────────────
   function renderToolRows() {
     var body = clear(document.getElementById("tool-rows"));
@@ -917,14 +1200,19 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   function openFindings(f) { setFilters(f); selectTab("findings"); window.scrollTo(0, 0); }
 
   function exportCsv() {
-    var cols = ["Severity", "Category", "Source", "CheckId", "Title", "Resource", "ResourceType", "ResourceId", "SubscriptionName", "SubscriptionId", "Finding", "Recommendation", "Reference", "Frameworks"];
-    var keys = ["severity", "category", "source", "checkId", "title", "resource", "resourceType", "resourceId", "subscriptionName", "subscriptionId", "finding", "recommendation", "reference", "frameworks"];
+    var cols = ["Severity", "Category", "Source", "CheckId", "Title", "Resource", "ResourceType", "ResourceId", "SubscriptionName", "SubscriptionId", "Finding", "Recommendation", "Reference", "Frameworks", "Vulnerabilities"];
+    var keys = ["severity", "category", "source", "checkId", "title", "resource", "resourceType", "resourceId", "subscriptionName", "subscriptionId", "finding", "recommendation", "reference", "frameworks", "vulnText"];
     var rows = filtered();
     if (state.openIssue) rows = rows.filter(function (f) { return f.source + "::" + (f.checkId || f.title) === state.openIssue; });
+    rows.forEach(function (f) { f.vulnText = f.vulns.join(", "); });
+    downloadCsv(cols, keys, rows, "-findings.csv");
+  }
+
+  function downloadCsv(cols, keys, rows, suffix) {
     var esc = function (v) { v = String(v == null ? "" : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
     var lines = [cols.join(";")].concat(rows.map(function (f) { return keys.map(function (k) { return esc(f[k]); }).join(";"); }));
     var blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-    var a = el("a", { href: URL.createObjectURL(blob), download: (META.fileBaseName || "azure-audit") + "-findings.csv" });
+    var a = el("a", { href: URL.createObjectURL(blob), download: (META.fileBaseName || "azure-audit") + suffix });
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
@@ -935,6 +1223,8 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
     initFilters();
     renderFindings();
     renderResources();
+    renderPlan();
+    renderVulns();
     renderToolRows();
 
     document.querySelectorAll(".tab").forEach(function (t) { t.addEventListener("click", function () { selectTab(t.getAttribute("data-tab")); }); });
@@ -945,7 +1235,11 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
       });
     });
     document.getElementById("btn-all-findings").addEventListener("click", function () { openFindings({}); });
+    document.getElementById("btn-plan").addEventListener("click", function () { selectTab("plan"); window.scrollTo(0, 0); });
+    document.getElementById("btn-plan-csv").addEventListener("click", exportPlanCsv);
     document.getElementById("btn-print").addEventListener("click", function () { window.print(); });
+    // Closed <details> do not print; open the workstreams so the plan prints in full.
+    window.addEventListener("beforeprint", function () { document.querySelectorAll("details.ws").forEach(function (d) { d.open = true; }); });
     document.getElementById("btn-csv").addEventListener("click", exportCsv);
     document.getElementById("btn-theme").addEventListener("click", function () {
       var root = document.documentElement;
@@ -957,7 +1251,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
     window.addEventListener("scroll", hideTip, { passive: true });
 
     var h = (location.hash || "").replace("#", "");
-    if (["overview", "findings", "resources", "tools"].indexOf(h) !== -1) selectTab(h);
+    if (["overview", "plan", "findings", "resources", "vulns", "tools"].indexOf(h) !== -1) selectTab(h);
   }
 
   init();

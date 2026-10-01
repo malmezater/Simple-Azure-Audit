@@ -152,7 +152,8 @@ function Add-Finding {
         [string]$ResourceId,
         [string]$SubscriptionId,
         [string]$Reference,
-        [string]$Frameworks
+        [string]$Frameworks,
+        [string]$Vulnerabilities     # comma-separated CVE / GHSA IDs
     )
 
     if (-not $Title)          { $Title = $Finding }
@@ -175,6 +176,7 @@ function Add-Finding {
         Recommendation = $Recommendation
         Reference      = $Reference
         Frameworks     = $Frameworks
+        Vulnerabilities = $Vulnerabilities
         Timestamp      = (Get-Date -Format "yyyy-MM-dd HH:mm")
     })
 }
@@ -185,7 +187,7 @@ function Import-FindingObjects {
     foreach ($i in $Items) {
         $obj = [ordered]@{}
         foreach ($f in "Source","Category","Severity","CheckId","Title","Resource","ResourceType","ResourceId",
-                      "SubscriptionId","Finding","Recommendation","Reference","Frameworks","Timestamp") {
+                      "SubscriptionId","Finding","Recommendation","Reference","Frameworks","Vulnerabilities","Timestamp") {
             $obj[$f] = "$(Get-PropValue $i $f)"
         }
         if (-not $obj.Source)  { $obj.Source = "Native" }

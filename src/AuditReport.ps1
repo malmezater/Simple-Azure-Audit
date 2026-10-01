@@ -14,6 +14,9 @@ function New-AuditReport {
         [Parameter(Mandatory)][string]$CsvPath,
         [Parameter(Mandatory)][string]$HtmlPath,
         [string]$DataPath,
+        [string]$ActionPlanPath,
+        [AllowEmptyCollection()][object[]]$Vulnerabilities = @(),   # from New-VulnerabilityCatalog
+        $VulnerabilityScan,                                         # Defender for Cloud summary, or $null
         [string]$CustomerName,
         [string]$PreparedBy,
         [string]$ScriptVersion,
@@ -37,9 +40,17 @@ function New-AuditReport {
     Write-Step "Saving CSV..."
     $sorted | Select-Object Severity, Category, Source, CheckId, Title, Resource, ResourceType, ResourceId,
                             @{ Name = "SubscriptionName"; Expression = $subNameProp }, SubscriptionId,
-                            Finding, Recommendation, Reference, Frameworks, Timestamp |
+                            Finding, Recommendation, Reference, Frameworks, Vulnerabilities, Timestamp |
         Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
     Write-Step "  $CsvPath" "Gray"
+
+    # ── Action plan ──────────────────────────────────────────
+    Write-Step "Building action plan..."
+    $plan = New-ActionPlan -Findings $sorted -Vulnerabilities $Vulnerabilities
+    if ($ActionPlanPath) {
+        Export-ActionPlanCsv -Plan $plan -Path $ActionPlanPath
+        Write-Step "  $ActionPlanPath" "Gray"
+    }
 
     # ── Data model ───────────────────────────────────────────
     $data = [ordered]@{
@@ -57,7 +68,10 @@ function New-AuditReport {
         tools    = @($ToolRuns)
         findings = @($sorted | Select-Object Source, Category, Severity, CheckId, Title, Resource, ResourceType, ResourceId,
                                              SubscriptionId, @{ Name = "SubscriptionName"; Expression = $subNameProp },
-                                             Finding, Recommendation, Reference, Frameworks)
+                                             Finding, Recommendation, Reference, Frameworks, Vulnerabilities)
+        vulnerabilities   = @($Vulnerabilities)
+        vulnerabilityScan = $VulnerabilityScan
+        plan              = $plan
     }
 
     $json = $data | ConvertTo-Json -Depth 8 -Compress -EscapeHandling EscapeHtml

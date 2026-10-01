@@ -1,6 +1,7 @@
 ﻿# ─────────────────────────────────────────────────────────────
 # Checks.Infrastructure.ps1
-# Infrastructure health: VM disk encryption, Key Vault certificates, Storage soft-delete.
+# Infrastructure health: VM disk encryption, Key Vault certificates, secrets/keys without
+# expiry, Storage soft-delete.
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-InfrastructureChecks {
@@ -50,6 +51,31 @@ function Invoke-InfrastructureChecks {
                 }
             }
         } catch { }
+    }
+
+    # Key Vault - secrets and keys without an expiry date (one finding per vault)
+    # Certificate-backed secrets/keys are skipped: they follow the certificate's own validity.
+    Write-Step "Checking Key Vault secrets and keys without expiry..."
+    foreach ($kv in $keyVaults) {
+        try {
+            $secrets = @(Get-AzKeyVaultSecret -VaultName $kv.VaultName -ErrorAction Stop | Where-Object {
+                $_.Enabled -ne $false -and -not $_.Expires -and "$($_.ContentType)" -notmatch 'pkcs12|pem-file'
+            })
+            $keys = @(Get-AzKeyVaultKey -VaultName $kv.VaultName -ErrorAction Stop | Where-Object {
+                $_.Enabled -ne $false -and -not $_.Expires -and -not (Get-PropValue $_ 'Managed')
+            })
+        } catch { continue }   # no data-plane read permission or firewall - nothing to judge
+        $names = @($secrets | ForEach-Object { "secret:$($_.Name)" }) + @($keys | ForEach-Object { "key:$($_.Name)" })
+        if ($names.Count -eq 0) { continue }
+        $list = ($names | Select-Object -First 10) -join ", "
+        if ($names.Count -gt 10) { $list += ", … (+$($names.Count - 10))" }
+        Add-Finding -Category "Infrastructure" -Severity "Low" `
+            -CheckId "NATIVE-INFRA-004" -Title "Key Vault secrets or keys without an expiry date" `
+            -Resource $kv.VaultName `
+            -ResourceId $kv.ResourceId `
+            -ResourceType "Key Vault" `
+            -Finding "$($secrets.Count) secret(s) and $($keys.Count) key(s) have no expiry date: $list" `
+            -Recommendation "Set an expiry date on every secret and key, rotate them before it passes (key rotation policy / Event Grid near-expiry events), and remove those no longer used. Secrets that never expire tend to live on long after the person or system that created them."
     }
 
     # Storage - blob soft delete

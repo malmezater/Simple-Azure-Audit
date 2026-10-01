@@ -14,11 +14,16 @@
       - The raw output of every external tool under raw\<tool>
 
     Built-in checks (-Tools Native):
-      1. Security       - NSG rules, open ports, RBAC/Owner roles, classic admins
+      1. Security       - NSG rules, open ports, RBAC/Owner roles, privileged roles directly on
+                          users (not group/PIM), storage shared key access, classic admins
       2. Cost           - Unattached disks, stopped VMs, orphaned NICs/PublicIPs, empty RGs
-      3. Infrastructure - VM disk encryption, Key Vault certificates, Storage soft-delete
+      3. Infrastructure - VM disk encryption, Key Vault certificates, secrets/keys without expiry,
+                          Storage soft-delete
       4. Compliance     - TLS versions, HTTPS enforcement, blob access, tagging, Key Vault protection
       5. Advisor        - All active Azure Advisor recommendations (requires Az.Advisor)
+      6. Governance     - Temporary, test/PoC and leftover resources by name (environments
+                          such as dev/test/acc/prod are recognised), expired DeleteAfter tags,
+                          resource groups without owner, temporary/test resources on the Internet
 
     External tools (all free / open source):
       Prowler   - CIS/NIST/ISO security posture for Azure and Entra ID (pip install prowler)
@@ -83,6 +88,10 @@
 .PARAMETER SkipAdvisor
     Skip the Azure Advisor fetch in the built-in checks.
 
+.PARAMETER Offline
+    Do not download the CISA Known Exploited Vulnerabilities catalogue (used to mark CVEs that are exploited
+    in the wild). A copy already in the run folder is still used.
+
 .PARAMETER OpenReport
     Open the HTML report automatically in the browser after the run.
 
@@ -130,6 +139,7 @@ param(
     [string]   $PreparedBy,
     [switch]   $InstallMissing,
     [switch]   $SkipAdvisor,
+    [switch]   $Offline,
     [switch]   $OpenReport,
     [ValidateSet("Report","Full","None")]
     [string]   $Zip           = "Report"
@@ -156,9 +166,9 @@ $srcPath = Join-Path $PSScriptRoot "src"
 # execution policy, missing, or broken) would be skipped and surface later as "Invoke-XScan is not recognized".
 $srcFiles = @(
     "AuditCommon.ps1",
-    "Checks.Security.ps1", "Checks.Cost.ps1", "Checks.Infrastructure.ps1", "Checks.Compliance.ps1", "Checks.Advisor.ps1",
+    "Checks.Security.ps1", "Checks.Cost.ps1", "Checks.Infrastructure.ps1", "Checks.Compliance.ps1", "Checks.Advisor.ps1", "Checks.Governance.ps1", "Checks.Vulnerabilities.ps1",
     "Tools.Common.ps1", "Tools.Prowler.ps1", "Tools.Maester.ps1", "Tools.PSRule.ps1", "Tools.AzGovViz.ps1", "Tools.WARA.ps1", "Tools.ARI.ps1",
-    "AuditReport.ps1"
+    "ActionPlan.ps1", "AuditReport.ps1"
 )
 foreach ($file in $srcFiles) {
     $srcFile = Join-Path $srcPath $file
@@ -348,9 +358,13 @@ else {
             Invoke-AdvisorChecks        -SkipAdvisor:$SkipAdvisor
         }
         $script:AuditContext.SubscriptionId = ""
+
+        # Once for all subscriptions, so naming conventions across subscriptions are recognised
+        Invoke-GovernanceChecks -Subscriptions $scopeSubs
+        $nativeRaw = Join-Path (Join-Path $runFolder "raw") "native"
+        Invoke-VulnerabilityChecks -Subscriptions $scopeSubs -RawFolder $nativeRaw
         $sw.Stop()
 
-        $nativeRaw = Join-Path (Join-Path $runFolder "raw") "native"
         New-Item -ItemType Directory -Force -Path $nativeRaw | Out-Null
         $nativeFindings = (Get-AuditFindings).ToArray()
         ConvertTo-Json -InputObject $nativeFindings -Depth 4 | Set-Content -Path (Join-Path $nativeRaw "findings.json") -Encoding utf8
@@ -375,8 +389,16 @@ else {
 $htmlPath = Join-Path $runFolder "$baseName.html"
 $csvPath  = Join-Path $runFolder "$baseName.csv"
 $dataPath = Join-Path $runFolder "audit-data.json"
+$planPath = Join-Path $runFolder "$($baseName)_ActionPlan.csv"
 $findings = Get-AuditFindings
 $toolRuns = Get-ToolRuns
+
+# CVE / GHSA IDs from every tool, marked with the CISA Known Exploited Vulnerabilities catalogue
+Write-Section "KNOWN VULNERABILITIES"
+Update-FindingVulnerabilities -Findings $findings
+$vulnerabilities = @(New-VulnerabilityCatalog -Findings $findings -RunFolder $runFolder -Offline:$Offline)
+$vulnScanFile = Join-Path (Join-Path (Join-Path $runFolder "raw") "native") "defender-va.json"
+$vulnScan = if (Test-Path $vulnScanFile) { Read-JsonFile $vulnScanFile } else { $null }
 
 $reportParams = @{
     Findings         = $findings
@@ -386,6 +408,9 @@ $reportParams = @{
     CsvPath          = $csvPath
     HtmlPath         = $htmlPath
     DataPath         = $dataPath
+    ActionPlanPath   = $planPath
+    Vulnerabilities  = $vulnerabilities
+    VulnerabilityScan = $vulnScan
     CustomerName     = $CustomerName
     PreparedBy       = $PreparedBy
     ScriptVersion    = $ScriptVersion
@@ -396,7 +421,7 @@ New-AuditReport @reportParams
 $zipFile = $null
 if ($Zip -ne "None") {
     try {
-        $zipFile = New-AuditReportPackage -RunFolder $runFolder -ReportFiles @($htmlPath, $csvPath, $dataPath) -ToolRuns $toolRuns -Mode $Zip
+        $zipFile = New-AuditReportPackage -RunFolder $runFolder -ReportFiles @($htmlPath, $csvPath, $planPath, $dataPath) -ToolRuns $toolRuns -Mode $Zip
     }
     catch {
         Write-Step "  Could not create the zip: $($_.Exception.Message)" "DarkYellow"
@@ -436,6 +461,7 @@ Write-Host @"
   ╚══════════════════════════════════════════════════╝
   HTML   : $(Split-Path $htmlPath -Leaf)
   CSV    : $(Split-Path $csvPath -Leaf)
+  Plan   : $(Split-Path $planPath -Leaf)
   Folder : $runFolder
 "@ -ForegroundColor Cyan
 if ($zipFile) {
