@@ -37,13 +37,15 @@ function Initialize-AuditAuth {
         [string]$TenantId,
         [string]$ClientId,
         [string]$CertificateThumbprint,
-        [securestring]$ClientSecret
+        [securestring]$ClientSecret,
+        [switch]$UseDeviceAuthentication
     )
     if (-not $ClientId) {
         if ($CertificateThumbprint -or $ClientSecret) { throw "-CertificateThumbprint and -ClientSecret require -ClientId (the app registration's application ID)." }
         return
     }
     if (-not $TenantId) { throw "-ClientId requires -TenantID." }
+    if ($UseDeviceAuthentication) { throw "-UseDeviceAuthentication is for user sign-in and cannot be used with -ClientId." }
     $guid = [guid]::Empty
     if (-not [guid]::TryParse($ClientId, [ref]$guid)) { throw "-ClientId must be the application (client) ID, a GUID." }
     if ($CertificateThumbprint -and $ClientSecret) { throw "Use either -CertificateThumbprint or -ClientSecret, not both." }
@@ -70,7 +72,10 @@ function Initialize-AuditAuth {
 
 function Connect-AuditAzure {
     # Signs this process in to Azure: as the app registration, or as a user (reusing a context when possible).
-    param([string]$TenantId)
+    param(
+        [string]$TenantId,
+        [switch]$UseDeviceAuthentication
+    )
     if (Test-AuditServicePrincipal) {
         $a = $script:AuditAuth
         # Process scope only: nothing about this sign-in is written to the user's Az profile on disk.
@@ -95,11 +100,31 @@ function Connect-AuditAzure {
         return
     }
 
-    if (-not (Get-AzContext -ErrorAction SilentlyContinue) -or ($TenantId -and (Get-AzContext).Tenant.Id -ne $TenantId)) {
-        Write-Host "`nSigning in to Azure..." -ForegroundColor Yellow
-        if ($TenantId) { Connect-AzAccount -TenantId $TenantId | Out-Null }
-        else { Connect-AzAccount | Out-Null }
+    # A context left in the session by an app registration (or a managed identity) is not reused:
+    # user mode must run as a user.
+    $ctx = Get-AzContext -ErrorAction SilentlyContinue
+    $reuse = $ctx -and $ctx.Account -and "$($ctx.Account.Type)" -eq "User" -and (-not $TenantId -or $ctx.Tenant.Id -eq $TenantId)
+    if ($reuse) {
+        Write-Host "`nUsing the existing Azure sign-in: $($ctx.Account.Id) (tenant $($ctx.Tenant.Id))" -ForegroundColor Yellow
+        return
     }
+
+    Write-Host "`nSigning in to Azure..." -ForegroundColor Yellow
+    $p = @{ ErrorAction = "Stop"; WarningAction = "SilentlyContinue" }
+    if ($TenantId) { $p.TenantId = $TenantId }
+    if ($UseDeviceAuthentication) {
+        $p.UseDeviceAuthentication = $true
+    }
+    else {
+        Write-Host "  If no sign-in window appears (it can open behind other windows, or not at all in an elevated or VS Code terminal), stop with Ctrl+C and run again with -UseDeviceAuthentication." -ForegroundColor DarkGray
+    }
+    try { Connect-AzAccount @p | Out-Null }
+    catch {
+        $hint = if ($UseDeviceAuthentication) { "" } else { " Try again with -UseDeviceAuthentication, or turn off the Windows sign-in broker with: Update-AzConfig -EnableLoginByWam `$false" }
+        throw "Azure sign-in failed: $($_.Exception.Message)$hint"
+    }
+    $ctx = Get-AzContext -ErrorAction SilentlyContinue
+    if (-not $ctx -or -not $ctx.Account) { throw "Azure sign-in did not complete (no account is signed in)." }
 }
 
 function Disconnect-AuditAzure {

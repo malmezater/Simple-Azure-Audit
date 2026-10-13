@@ -62,6 +62,10 @@
     With -ClientId: the client secret as a SecureString. Omitted (and no -CertificateThumbprint) = you are
     prompted for it without echo. There is deliberately no plain-text secret parameter.
 
+.PARAMETER UseDeviceAuthentication
+    User sign-in with a device code (open https://microsoft.com/devicelogin and enter the code) instead of
+    the Windows sign-in window. Use it when no sign-in window appears, e.g. in an elevated or VS Code terminal.
+
 .PARAMETER SubscriptionId
     One or more subscription IDs to audit (array or comma-separated). Omitted = you are prompted
     when several are available and can answer e.g. 2, 1-3, 1,3,5 or all.
@@ -144,12 +148,13 @@
     Global Reader in Entra ID for Maester, and Reader on the management group for AzGovViz.
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string]   $TenantID,
     [string]   $ClientId,
     [string]   $CertificateThumbprint,
     [securestring] $ClientSecret,
+    [switch]   $UseDeviceAuthentication,
     [string[]] $SubscriptionId,
     [switch]   $AllSubscriptions,
     [string]   $OutputPath    = ".",
@@ -169,7 +174,10 @@ param(
     [switch]   $Offline,
     [switch]   $OpenReport,
     [ValidateSet("Report","Full","None")]
-    [string]   $Zip           = "Report"
+    [string]   $Zip           = "Report",
+    # "pwsh -File" passes -SubscriptionId "a", "b" as separate arguments; the ones after the first land here.
+    [Parameter(ValueFromRemainingArguments = $true, DontShow = $true)]
+    [string[]] $MoreSubscriptionIds = @()
 )
 
 Set-StrictMode -Version Latest
@@ -302,9 +310,9 @@ else {
     }
 
     try {
-        Initialize-AuditAuth -TenantId $TenantID -ClientId $ClientId -CertificateThumbprint $CertificateThumbprint -ClientSecret $ClientSecret
+        Initialize-AuditAuth -TenantId $TenantID -ClientId $ClientId -CertificateThumbprint $CertificateThumbprint -ClientSecret $ClientSecret -UseDeviceAuthentication:$UseDeviceAuthentication
         $ClientSecret = $null
-        Connect-AuditAzure -TenantId $TenantID
+        Connect-AuditAzure -TenantId $TenantID -UseDeviceAuthentication:$UseDeviceAuthentication
     }
     catch { Stop-Audit $_.Exception.Message }
 
@@ -314,7 +322,8 @@ else {
     $available = @(Get-AzSubscription @subParams | Where-Object { $_.State -eq "Enabled" } | Sort-Object Name)
     if ($available.Count -eq 0) { Stop-Audit "No enabled subscriptions were found for the signed-in account." }
 
-    $requestedIds = @($SubscriptionId | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ })
+    $requestedIds = @(@($SubscriptionId) + @($MoreSubscriptionIds) | ForEach-Object { $_ -split '[,;\s]+' } |
+        ForEach-Object { $_.Trim('"', "'") } | Where-Object { $_ })
     if ($requestedIds.Count -gt 0) {
         $selected = @(foreach ($id in $requestedIds) {
             $match = $available | Where-Object { $_.Id -eq $id -or $_.Name -eq $id } | Select-Object -First 1
