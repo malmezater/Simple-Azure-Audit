@@ -31,7 +31,7 @@ $script:PlanWorkstreams = @(
             "Turn off anonymous blob access and delete public IPs that are not used."
             "Prevent it from coming back with Azure Policy (deny public IPs / public network access) and Defender for Cloud recommendations.")
         checkIds = @("NATIVE-SEC-001", "NATIVE-SEC-002", "NATIVE-GOV-006", "NATIVE-COMP-003")
-        pattern = 'public (network )?access|public ip|publicly|internet|0\.0\.0\.0|any source|open port|management port|\bnsg\b|network security group|firewall|private (endpoint|link)|anonymous|\brdp\b|\bssh\b|jit|just-in-time'
+        pattern = 'public (network )?access|public ip|publicly|internet|0\.0\.0\.0|any source|open port|management port|\bnsg\b|network security group|firewall|private (endpoint|link)|anonymous|\brdp\b|\bssh\b|jit|just-in-time|\bddos\b'
     }
     [ordered]@{
         id = "vulnerabilities"; name = "Patch known vulnerabilities"; effort = "Medium"; owner = "Server / application owners"
@@ -78,7 +78,7 @@ $script:PlanWorkstreams = @(
             "Enable encryption at host or disk encryption for VMs; use customer-managed keys where the requirements say so."
             "Use Azure Policy to require these settings on new resources.")
         checkIds = @("NATIVE-COMP-001", "NATIVE-COMP-002", "NATIVE-COMP-004", "NATIVE-COMP-005", "NATIVE-INFRA-001", "NATIVE-SEC-005")
-        pattern = '\btls\b|https|ssl|encrypt|shared key|\bsas\b|customer.managed key|\bcmk\b|in transit|at rest|secure transfer|minimum version'
+        pattern = '\btls\b|https|ssl|encrypt|shared key|\bsas\b|customer.managed key|\bcmk\b|in transit|at rest|secure transfer|minimum version|cross.?tenant|exfiltrat'
     }
     [ordered]@{
         id = "monitoring"; name = "Detect and respond"; effort = "Medium"; owner = "Security operations / platform team"
@@ -177,11 +177,14 @@ function Get-PlanWorkstream {
     # Id of the workstream an issue belongs to.
     param([Parameter(Mandatory)]$Issue)
     $title = "$($Issue.Title)".ToLower()
+    # A merged issue (several tools) has several check IDs and sources; any of them can match.
+    $checkIds = @("$($Issue.CheckId)" -split '\s*,\s*' | Where-Object { $_ })
+    $sources = @("$($Issue.Source)" -split '\s*,\s*' | Where-Object { $_ })
     foreach ($ws in $script:PlanWorkstreams) {
-        foreach ($c in @($ws['checkIds'])) { if ($c -and $Issue.CheckId -like $c) { return $ws.id } }
+        foreach ($c in @($ws['checkIds'])) { if ($c -and ($checkIds | Where-Object { $_ -like $c })) { return $ws.id } }
     }
     foreach ($ws in $script:PlanWorkstreams) {
-        if (@($ws['sources']) -contains $Issue.Source) { return $ws.id }
+        if ($sources | Where-Object { @($ws['sources']) -contains $_ }) { return $ws.id }
     }
     if ($Issue.Vulnerabilities) { return "vulnerabilities" }
     # A retirement is about the service's lifecycle, whatever service it names ("Retirement: Basic SKU public IP")
@@ -209,8 +212,8 @@ function Get-PlanPhase {
 
 function New-ActionPlan {
     <#
-      Groups findings into issues (Source + CheckId, the same key as the HTML report) and places each
-      issue in a workstream and a phase. Returns @{ phases; workstreams; items } for audit-data.json.
+      Groups findings into issues (the merge topic, else Source + CheckId; the same key as the HTML report)
+      and places each issue in a workstream and a phase. Returns @{ phases; workstreams; items } for audit-data.json.
     #>
     param(
         [Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Findings,
@@ -222,13 +225,18 @@ function New-ActionPlan {
     $sevRank = @{ Critical = 0; High = 1; Medium = 2; Low = 3; Info = 4 }
     $issues = [ordered]@{}
     foreach ($f in $Findings) {
-        $key = "$($f.Source)::$(if ($f.CheckId) { $f.CheckId } else { $f.Title })"
+        $key = if ($f.Topic) { "topic::$($f.Topic)" } else { "$($f.Source)::$(if ($f.CheckId) { $f.CheckId } else { $f.Title })" }
         if (-not $issues.Contains($key)) {
-            $issues[$key] = [ordered]@{ Key = $key; Title = $f.Title; Source = $f.Source; Category = $f.Category; CheckId = $f.CheckId
-                                        Severity = $f.Severity; Recommendation = $f.Recommendation; Resources = @{}; Findings = 0; Ids = @{} }
+            $issues[$key] = [ordered]@{ Key = $key; Title = $f.Title; Category = $f.Category
+                                        Severity = $f.Severity; Recommendation = $f.Recommendation; Resources = @{}; Findings = 0; Ids = @{}
+                                        Sources = [System.Collections.Generic.List[string]]::new(); CheckIds = [System.Collections.Generic.List[string]]::new() }
         }
         $i = $issues[$key]
         $i.Findings++
+        $srcList = if ($f.PSObject.Properties['Sources'] -and $f.Sources) { "$($f.Sources)" } else { "$($f.Source)" }
+        $idList  = if ($f.PSObject.Properties['CheckIds'] -and $f.CheckIds) { "$($f.CheckIds)" } else { "$($f.CheckId)" }
+        foreach ($s in ($srcList -split '\s*,\s*' | Where-Object { $_ })) { if (-not $i.Sources.Contains($s)) { $i.Sources.Add($s) } }
+        foreach ($c in ($idList -split '\s*,\s*' | Where-Object { $_ })) { if (-not $i.CheckIds.Contains($c)) { $i.CheckIds.Add($c) } }
         $i.Resources[("$(if ($f.ResourceId) { $f.ResourceId } else { $f.Resource })").ToLower()] = $true
         if ($sevRank[$f.Severity] -lt $sevRank[$i.Severity]) { $i.Severity = $f.Severity }
         foreach ($id in @("$($f.Vulnerabilities)" -split '\s*,\s*' | Where-Object { $_ })) { $i.Ids[$id] = $true }
@@ -237,7 +245,7 @@ function New-ActionPlan {
     $items = foreach ($i in $issues.Values) {
         $ids = @($i.Ids.Keys | Sort-Object)
         $issue = [PSCustomObject]@{
-            Key = $i.Key; Title = $i.Title; Source = $i.Source; Category = $i.Category; CheckId = $i.CheckId; Severity = $i.Severity
+            Key = $i.Key; Title = $i.Title; Source = ($i.Sources -join ", "); Category = $i.Category; CheckId = ($i.CheckIds -join ", "); Severity = $i.Severity
             Recommendation = $i.Recommendation; Resources = $i.Resources.Count; Findings = $i.Findings
             Vulnerabilities = ($ids -join ", "); KnownExploited = @($ids | Where-Object { $kev.ContainsKey($_) }).Count -gt 0
             Workstream = ""; Phase = ""

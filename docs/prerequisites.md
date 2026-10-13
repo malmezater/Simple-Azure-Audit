@@ -77,4 +77,17 @@ Notes:
 - **Internet access.** To mark CVEs as known exploited, the machine needs to reach `www.cisa.gov` over HTTPS. Without it, or with `-Offline`, the CVEs are still listed.
 - **PIM.** `NATIVE-SEC-006` reads role assignment schedule instances to leave out active PIM activations. Reader includes this permission. Without it, active PIM activations are reported as permanent assignments.
 
+### App registration
+
+With `-ClientId` the audit signs in as an existing app registration instead of a user. The script never creates or changes an app; create it yourself, preferably with a certificate. The app needs:
+
+| Where | Permission | Used by |
+|-------|------------|---------|
+| Subscriptions / management group | The same Azure roles as a user (table above): **Reader** (Security Reader recommended), **Reader** on the management group for AzGovViz, **Key Vault Reader** for the Key Vault checks | All Azure checks |
+| Microsoft Graph, *application* permissions with admin consent | The application equivalents of the scopes `Get-MtGraphScope` lists (run it after `Import-Module Maester`), e.g. `Directory.Read.All`, `Policy.Read.All`, `RoleManagement.Read.All`, `UserAuthenticationMethod.Read.All` | Maester |
+| | `Directory.Read.All`, `Policy.Read.All`, `UserAuthenticationMethod.Read.All` | Prowler Entra ID checks |
+| | `User.Read.All`, `Group.Read.All`, `Application.Read.All` | AzGovViz identity resolution |
+
+An app reads Microsoft Graph through its application permissions; it does not need the Global Reader role. Check each tool's own documentation for its current list. Missing Graph permissions make the Entra ID tests fail or be skipped, which shows in the **Tools & method** tab.
+
 > Checks that cannot run because of missing permissions produce no findings. A low count is not proof of compliance. The **Tools & method** tab in the report shows which tools ran and which failed.

@@ -12,6 +12,10 @@ Every external tool writes a transcript to `logs\<tool>.log` in the run folder. 
 | **"Could not load src\\…" / blocked by execution policy** | The files are marked as downloaded from the internet. Run `Get-ChildItem . -Recurse -File \| Unblock-File`, or start with `pwsh -ExecutionPolicy Bypass -File .\Invoke-AzureAudit.ps1`. |
 | **Run aborts with a `??` parse error** | Use `pwsh` (PowerShell 7), not Windows PowerShell 5.1. |
 | **Garbled characters (å/ä/ö, box drawing)** | Keep the `.ps1` files saved as UTF-8 with BOM. |
+| **"App registration sign-in failed"** | Check the tenant ID, the application ID and the secret or certificate. With `-CertificateThumbprint` the certificate must be in `Cert:\CurrentUser\My` or `Cert:\LocalMachine\My` with its private key, and its public part uploaded to the app. |
+| **App registration: "No enabled subscriptions were found"** | The app has no Azure role yet. Give it Reader on the subscriptions or a management group. |
+| **App registration: Maester, Prowler Entra or AzGovViz identity checks fail** | The app lacks Microsoft Graph *application* permissions, or admin consent was not granted. See [App registration](prerequisites.md#app-registration). |
+| **App registration: Prowler shows *Skipped*** | Prowler supports app sign-in with a client secret only. Use `-ClientSecret` (or the prompt) instead of `-CertificateThumbprint`, or run Prowler separately. |
 
 ## Built-in checks
 
@@ -24,6 +28,8 @@ Every external tool writes a transcript to `logs\<tool>.log` in the run folder. 
 | **Vulnerabilities tab is empty** | Defender for Cloud has no vulnerability results: Defender for Servers / Containers / SQL vulnerability assessment is not enabled, or no machine has been scanned yet. The message at the top of the tab says which. The configuration tools rarely report CVEs. |
 | **"Could not download the KEV catalogue"** | The machine cannot reach `www.cisa.gov` (proxy or firewall). CVEs are still listed but not marked as known exploited. Copy `known_exploited_vulnerabilities.json` into `<RunFolder>\raw\kev\` and rebuild with `-ImportFrom`, or run with `-Offline`. |
 | **An issue is in the wrong workstream of the action plan** | It was placed by keywords in its title. Add its check ID to the right workstream's `checkIds` in `src\ActionPlan.ps1` and rebuild with `-ImportFrom`. |
+| **The same problem still shows as two issues from different tools** | No topic in `src\FindingMerge.ps1` matches both checks yet, or the tools use different resource IDs. Add the check's wording to the topic's `Pattern` and rebuild with `-ImportFrom`. See [Merging duplicate findings](development.md#merging-duplicate-findings). |
+| **Two different problems were merged into one row** | Their titles both match the same topic. Narrow the topic's `Pattern`, or add an `Exclude`, in `src\FindingMerge.ps1`. *Reported by* on the issue shows which checks were merged. |
 | **Active PIM activations reported as `NATIVE-SEC-006`** | The account could not read role assignment schedule instances. Use an account with Reader on the subscription. |
 
 ## Prowler

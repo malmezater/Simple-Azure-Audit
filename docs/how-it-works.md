@@ -5,7 +5,7 @@ This page describes what a run does, so it can be approved before it is used aga
 ## In short
 
 - **Read-only in Azure and Entra ID.** No resource, setting, role or policy is created, changed or deleted.
-- **Runs as the signed-in user.** No app registration, service principal or secret is created. Access follows the roles described in [Prerequisites](prerequisites.md#permissions).
+- **Runs as the signed-in user, or as an app registration you provide** (`-ClientId`). The script never creates an app registration, service principal or secret, and saves nothing about an app it signs in with. Access follows the roles described in [Prerequisites](prerequisites.md#permissions).
 - **Results stay on the machine.** Everything is written to a local run folder. Nothing is uploaded, and the report works offline.
 - **One public download outside Azure.** When a CVE is found, the public CISA KEV catalogue is downloaded from cisa.gov (a plain GET, nothing about the environment is sent). `-Offline` turns it off.
 
@@ -47,6 +47,7 @@ A tool that is not installed, or that fails, is recorded with its status and the
 | `Connect-AzAccount` | The main script and the PowerShell tools | PSRule, AzGovViz, WARA and ARI run in a child `pwsh` process that reuses this sign-in. |
 | `Connect-MgGraph` (interactive, delegated) | Maester | The window can open behind other windows. Maester also gets a short-lived ARM access token through an environment variable of its child process. The token is never written to a script file or log. |
 | `az login`, or Prowler's browser sign-in | Prowler | When the Azure CLI is signed in to the same tenant, Prowler uses it. Otherwise Prowler opens a browser. |
+| App registration (`-ClientId`) | All tools | Az: `Connect-AzAccount -ServicePrincipal` with the context autosave off for the process, in the main script and again in each child process. Graph (Maester): app-only `Connect-MgGraph -ContextScope Process`. Prowler: `--sp-env-auth` (client secret only). The client ID, thumbprint and secret reach a tool through environment variables that exist only while it runs; they are never written to a file. See [Usage](usage.md#signing-in-as-an-app-registration). |
 
 ## What is written to disk
 

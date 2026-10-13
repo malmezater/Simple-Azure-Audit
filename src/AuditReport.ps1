@@ -33,12 +33,22 @@ function New-AuditReport {
     # Resolve the subscription name for every finding (tenant-level findings keep "-")
     $subNameProp = { $id = "$($_.SubscriptionId)".ToLower(); if ($subNames.ContainsKey($id)) { $subNames[$id] } elseif ($id -and $id -ne '-') { $id } else { "Tenant" } }
 
+    # Same problem on the same resource from several tools -> one row (see FindingMerge.ps1)
+    $merged = Merge-AuditFindings -Findings @($Findings)
+    $mergedRows = @($merged | Where-Object { $_.Detections.Count -gt 1 })
+    if ($mergedRows.Count) {
+        $absorbed = ($mergedRows | ForEach-Object { $_.Detections.Count - 1 } | Measure-Object -Sum).Sum
+        Write-Step "Merged $absorbed duplicate findings reported by more than one tool or check ($($Findings.Count) -> $($merged.Count) rows)." "Gray"
+    }
+
     $sevOrder = @{ "Critical" = 0; "High" = 1; "Medium" = 2; "Low" = 3; "Info" = 4 }
-    $sorted   = @($Findings | Sort-Object { $sevOrder[$_.Severity] }, Category, Title, Resource)
+    $sorted   = @($merged | Sort-Object { $sevOrder[$_.Severity] }, Category, Title, Resource)
 
     # ── CSV ──────────────────────────────────────────────────
+    # Source and CheckId list every tool and check when several reported the same problem.
     Write-Step "Saving CSV..."
-    $sorted | Select-Object Severity, Category, Source, CheckId, Title, Resource, ResourceType, ResourceId,
+    $sorted | Select-Object Severity, Category, @{ Name = "Source"; Expression = { $_.Sources } }, @{ Name = "CheckId"; Expression = { $_.CheckIds } },
+                            Title, Resource, ResourceType, ResourceId,
                             @{ Name = "SubscriptionName"; Expression = $subNameProp }, SubscriptionId,
                             Finding, Recommendation, Reference, Frameworks, Vulnerabilities, Timestamp |
         Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8 -Delimiter ";"
@@ -66,9 +76,9 @@ function New-AuditReport {
             fileBaseName     = [System.IO.Path]::GetFileNameWithoutExtension($HtmlPath)
         }
         tools    = @($ToolRuns)
-        findings = @($sorted | Select-Object Source, Category, Severity, CheckId, Title, Resource, ResourceType, ResourceId,
+        findings = @($sorted | Select-Object Source, Sources, Category, Severity, CheckId, CheckIds, Topic, Title, Resource, ResourceType, ResourceId,
                                              SubscriptionId, @{ Name = "SubscriptionName"; Expression = $subNameProp },
-                                             Finding, Recommendation, Reference, Frameworks, Vulnerabilities)
+                                             Finding, Recommendation, Reference, Frameworks, Vulnerabilities, Detections)
         vulnerabilities   = @($Vulnerabilities)
         vulnerabilityScan = $VulnerabilityScan
         plan              = $plan

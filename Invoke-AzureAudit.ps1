@@ -48,6 +48,20 @@
 .PARAMETER TenantID
     Tenant to sign in to. Omitted = the active context is used.
 
+.PARAMETER ClientId
+    Sign in as an app registration (service principal) instead of a user: its application (client) ID.
+    Requires -TenantID, plus -CertificateThumbprint or a client secret. Nothing about the app is saved:
+    the Az context autosave is turned off for this process, and the ID, thumbprint and secret are not
+    written to run.json, logs or generated scripts.
+
+.PARAMETER CertificateThumbprint
+    With -ClientId: thumbprint of the app's certificate in Cert:\CurrentUser\My or Cert:\LocalMachine\My
+    (recommended; the private key never leaves the certificate store). Prowler does not support it and is skipped.
+
+.PARAMETER ClientSecret
+    With -ClientId: the client secret as a SecureString. Omitted (and no -CertificateThumbprint) = you are
+    prompted for it without echo. There is deliberately no plain-text secret parameter.
+
 .PARAMETER SubscriptionId
     One or more subscription IDs to audit (array or comma-separated). Omitted = you are prompted
     when several are available and can answer e.g. 2, 1-3, 1,3,5 or all.
@@ -114,6 +128,11 @@
     .\Invoke-AzureAudit.ps1 -SubscriptionId "sub-id-1","sub-id-2" -OpenReport
 
 .EXAMPLE
+    pwsh -File .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -ClientId "yyyyyyyy-..." -CertificateThumbprint "A1B2..." -AllSubscriptions
+    Signs in as an app registration with a certificate. Running it with pwsh -File keeps the app's session in a
+    process of its own that ends with the audit.
+
+.EXAMPLE
     .\Invoke-AzureAudit.ps1 -ImportFrom "C:\Temp\AuditReports\AzureAudit_Prod_2026-09-16_08-12" -OpenReport
 
 .NOTES
@@ -124,6 +143,9 @@
 [CmdletBinding()]
 param(
     [string]   $TenantID,
+    [string]   $ClientId,
+    [string]   $CertificateThumbprint,
+    [securestring] $ClientSecret,
     [string[]] $SubscriptionId,
     [switch]   $AllSubscriptions,
     [string]   $OutputPath    = ".",
@@ -154,6 +176,7 @@ function Stop-Audit {
     # $ErrorActionPreference is SilentlyContinue for the Az calls, which would also swallow 'throw'.
     param([Parameter(Mandatory)][string]$Message)
     Write-Host "`nERROR: $Message" -ForegroundColor Red
+    if (Get-Command Disconnect-AuditAzure -CommandType Function -ErrorAction SilentlyContinue) { Disconnect-AuditAzure }
     exit 1
 }
 
@@ -165,10 +188,10 @@ $srcPath = Join-Path $PSScriptRoot "src"
 # Loading must fail loudly: with SilentlyContinue a file that cannot be loaded (blocked by the
 # execution policy, missing, or broken) would be skipped and surface later as "Invoke-XScan is not recognized".
 $srcFiles = @(
-    "AuditCommon.ps1",
+    "AuditCommon.ps1", "AuditAuth.ps1",
     "Checks.Security.ps1", "Checks.Cost.ps1", "Checks.Infrastructure.ps1", "Checks.Compliance.ps1", "Checks.Advisor.ps1", "Checks.Governance.ps1", "Checks.Vulnerabilities.ps1",
     "Tools.Common.ps1", "Tools.Prowler.ps1", "Tools.Maester.ps1", "Tools.PSRule.ps1", "Tools.AzGovViz.ps1", "Tools.WARA.ps1", "Tools.ARI.ps1",
-    "ActionPlan.ps1", "AuditReport.ps1"
+    "FindingMerge.ps1", "ActionPlan.ps1", "AuditReport.ps1"
 )
 foreach ($file in $srcFiles) {
     $srcFile = Join-Path $srcPath $file
@@ -189,7 +212,7 @@ foreach ($file in $srcFiles) {
     }
 }
 $missingFunctions = @("Invoke-AuditTools", "Invoke-ProwlerScan", "Invoke-MaesterScan", "Invoke-PSRuleScan", "Invoke-AzGovVizScan",
-    "Invoke-WARAScan", "Invoke-ARIScan", "New-AuditReport") | Where-Object { -not (Get-Command $_ -CommandType Function -ErrorAction SilentlyContinue) }
+    "Invoke-WARAScan", "Invoke-ARIScan", "Merge-AuditFindings", "New-AuditReport") | Where-Object { -not (Get-Command $_ -CommandType Function -ErrorAction SilentlyContinue) }
 if ($missingFunctions) { Stop-Audit "The src files did not load completely (missing: $($missingFunctions -join ', ')). Copy the complete src folder again." }
 
 $allTools = @("Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")
@@ -260,11 +283,12 @@ else {
         Stop-Audit "Missing required modules: $($missingModules -join ', '). Install with: Install-Module $($missingModules -join ', ') -Scope CurrentUser"
     }
 
-    if (-not (Get-AzContext -ErrorAction SilentlyContinue) -or ($TenantID -and (Get-AzContext).Tenant.Id -ne $TenantID)) {
-        Write-Host "`nSigning in to Azure..." -ForegroundColor Yellow
-        if ($TenantID) { Connect-AzAccount -TenantId $TenantID | Out-Null }
-        else { Connect-AzAccount | Out-Null }
+    try {
+        Initialize-AuditAuth -TenantId $TenantID -ClientId $ClientId -CertificateThumbprint $CertificateThumbprint -ClientSecret $ClientSecret
+        $ClientSecret = $null
+        Connect-AuditAzure -TenantId $TenantID
     }
+    catch { Stop-Audit $_.Exception.Message }
 
     # ── Subscription scope ───────────────────────────────────
     $subParams = @{ ErrorAction = "SilentlyContinue" }
@@ -330,7 +354,7 @@ else {
         BaseName = $baseName; TenantId = $tenant; Subscriptions = $scopeSubs
         SubscriptionName = $scopeSubs[0].Name; SubscriptionId = $scopeSubs[0].Id
         CustomerName = $CustomerName; PreparedBy = $PreparedBy; StartedAt = $generatedAt
-        Tools = $selectedTools; ScriptVersion = $ScriptVersion; Account = "$($ctx.Account.Id)"
+        Tools = $selectedTools; ScriptVersion = $ScriptVersion; Account = (Get-AuditAccountLabel)
     } | ConvertTo-Json | Set-Content -Path (Join-Path $runFolder "run.json") -Encoding utf8
 
     Write-Host "`n  Tenant       : $tenant" -ForegroundColor Gray
@@ -379,6 +403,12 @@ else {
             -ManagementGroupId $ManagementGroupId -ToolsPath $ToolsPath -InstallMissing:$InstallMissing
         # Tool runs may have switched the Az context; restore it for anything that follows.
         Set-AzContext -SubscriptionId $scopeSubs[0].Id -ErrorAction SilentlyContinue | Out-Null
+    }
+
+    # Everything below works on the collected data. An app registration's session ends here.
+    if (Test-AuditServicePrincipal) {
+        Disconnect-AuditAzure
+        Write-Step "  Signed out the app registration (nothing about it was saved)." "Gray"
     }
 }
 

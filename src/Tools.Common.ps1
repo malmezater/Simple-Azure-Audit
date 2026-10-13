@@ -7,6 +7,8 @@
 # pwsh process. That keeps their module state, StrictMode and preference
 # variables away from this script. The Az login is shared through the
 # normal Az context autosave, so no extra sign-in is needed for Az-based tools.
+# With an app registration (-ClientId) autosave is off, and each child signs in
+# for itself with -SignInAzure (see AuditAuth.ps1).
 # ─────────────────────────────────────────────────────────────
 
 $script:ToolCatalog = [ordered]@{
@@ -71,14 +73,22 @@ function Invoke-ToolProcess {
     <#
       Runs a script block text in a child pwsh process with a transcript.
       The child inherits the console, so interactive sign-ins (browser/device code) work.
+      -SignInAzure: with an app registration, the child signs in to Azure first (see AuditAuth.ps1).
+      The app's details reach the child only through environment variables that are removed again
+      when it ends, never through the script text.
       Returns [PSCustomObject]@{ ExitCode; DurationSeconds; LogPath }
     #>
     param(
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][string]$ScriptText,
         [Parameter(Mandatory)][string]$WorkingDirectory,
-        [Parameter(Mandatory)][string]$LogDirectory
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [switch]$SignInAzure
     )
+    if ($SignInAzure) {
+        $signIn = Get-AuditChildAzSignIn
+        if ($signIn) { $ScriptText = "$signIn`n$ScriptText" }
+    }
 
     New-Item -ItemType Directory -Force -Path $WorkingDirectory, $LogDirectory | Out-Null
     $logPath    = Join-Path $LogDirectory "$($Name.ToLower()).log"
@@ -107,10 +117,16 @@ exit `$__exit
     # Start-Process -NoNewWindow shares the console (so sign-in prompts are visible)
     # without the child's output leaking into this function's return value.
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    $proc = Start-Process -FilePath (Get-PwshPath) -NoNewWindow -Wait -PassThru `
-        -ArgumentList @("-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", "`"$scriptPath`"")
-    $exit = $proc.ExitCode
-    $sw.Stop()
+    try {
+        Set-AuditAuthEnvironment
+        $proc = Start-Process -FilePath (Get-PwshPath) -NoNewWindow -Wait -PassThru `
+            -ArgumentList @("-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", "`"$scriptPath`"")
+        $exit = $proc.ExitCode
+    }
+    finally {
+        Clear-AuditAuthEnvironment
+        $sw.Stop()
+    }
 
     return [PSCustomObject]@{
         ExitCode        = $exit

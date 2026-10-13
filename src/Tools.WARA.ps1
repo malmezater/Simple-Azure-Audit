@@ -34,7 +34,7 @@ Start-WARACollector -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionIds 
 "@
 
     Write-Step "  Running Start-WARACollector..." "Gray"
-    $r = Invoke-ToolProcess -Name "WARA" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
+    $r = Invoke-ToolProcess -Name "WARA" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory -SignInAzure
     $hasOutput = [bool](Get-LatestFile -Path $RawFolder -Filter "WARA-File-*.json")
     $status = if ($hasOutput) { "Succeeded" } else { "Failed" }
     Save-ToolRunState -RawFolder $RawFolder -State @{

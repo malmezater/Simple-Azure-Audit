@@ -37,7 +37,7 @@ Invoke-ARI -TenantID $(ConvertTo-PSLiteral $TenantId) -SubscriptionID $(ConvertT
 "@
 
     Write-Step "  Running Invoke-ARI..." "Gray"
-    $r = Invoke-ToolProcess -Name "ARI" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
+    $r = Invoke-ToolProcess -Name "ARI" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory -SignInAzure
     $hasOutput = [bool](Get-LatestFile -Path $RawFolder -Filter "*.xlsx" -Recurse)
     Save-ToolRunState -RawFolder $RawFolder -State @{
         Status = $(if ($hasOutput) { "Succeeded" } else { "Failed" })

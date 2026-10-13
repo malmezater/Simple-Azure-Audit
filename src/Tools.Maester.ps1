@@ -5,9 +5,11 @@
 # CISA/CIS, Azure) in a child process and imports the JSON results.
 #
 # Install: Install-Module Maester, Pester -Scope CurrentUser
-# Auth:    Connect-MgGraph (interactive, delegated) + an ARM token handed over by the main script.
+# Auth:    Connect-MgGraph (interactive, delegated; or app-only with -ClientId) + an ARM token
+#          handed over by the main script.
 #          Needs a user that can read the directory and Conditional Access policies
-#          (Global Reader is recommended).
+#          (Global Reader is recommended). An app registration needs the corresponding Graph
+#          application permissions instead (see docs/prerequisites.md).
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-MaesterScan {
@@ -33,13 +35,33 @@ function Invoke-MaesterScan {
     # Azure.Identity, and whichever loads first wins; with Az.Accounts first, Connect-MgGraph
     # fails with "Method not found: ... InteractiveBrowserCredential.Authenticate". So Graph is
     # connected explicitly first, and the Az context saved by the main script is attached afterwards.
+    # User: delegated, interactive sign-in. App registration: app-only sign-in with the details from
+    # the environment (removed right away), and -ContextScope Process so no token cache is written to disk.
+    $graphConnect = if (Test-AuditServicePrincipal) { @'
+$__sp = @{ Tenant = $env:SIMPLEAZUREAUDIT_SP_TENANT; Id = $env:SIMPLEAZUREAUDIT_SP_CLIENTID; Thumb = $env:SIMPLEAZUREAUDIT_SP_THUMBPRINT; Secret = $env:SIMPLEAZUREAUDIT_SP_SECRET }
+Remove-Item Env:\SIMPLEAZUREAUDIT_SP_TENANT, Env:\SIMPLEAZUREAUDIT_SP_CLIENTID, Env:\SIMPLEAZUREAUDIT_SP_THUMBPRINT, Env:\SIMPLEAZUREAUDIT_SP_SECRET -ErrorAction SilentlyContinue
+try {
+    if ($__sp.Thumb) {
+        Connect-MgGraph -ClientId $__sp.Id -TenantId $__sp.Tenant -CertificateThumbprint $__sp.Thumb -ContextScope Process -NoWelcome -ErrorAction Stop
+    } else {
+        $__cred = [pscredential]::new($__sp.Id, (ConvertTo-SecureString -String $__sp.Secret -AsPlainText -Force))
+        Connect-MgGraph -ClientSecretCredential $__cred -TenantId $__sp.Tenant -ContextScope Process -NoWelcome -ErrorAction Stop
+    }
+}
+finally { $__sp = $null; $__cred = $null }
+if (-not (Get-MgContext)) { throw 'Not connected to Microsoft Graph.' }
+Write-Host 'Connected to Microsoft Graph as the app registration (this process only, nothing saved)'
+'@ } else { @"
+Connect-MgGraph -Scopes (Get-MtGraphScope) -TenantId $(ConvertTo-PSLiteral $TenantId) -NoWelcome -ErrorAction Stop
+if (-not (Get-MgContext)) { throw 'Not connected to Microsoft Graph.' }
+Write-Host "Connected to Microsoft Graph as `$((Get-MgContext).Account)"
+"@ }
+
     $script = @"
 Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
 Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop
 Import-Module Maester -ErrorAction Stop
-Connect-MgGraph -Scopes (Get-MtGraphScope) -TenantId $(ConvertTo-PSLiteral $TenantId) -NoWelcome -ErrorAction Stop
-if (-not (Get-MgContext)) { throw 'Not connected to Microsoft Graph.' }
-Write-Host "Connected to Microsoft Graph as `$((Get-MgContext).Account)"
+$graphConnect
 
 `$tests = $(ConvertTo-PSLiteral $testsPath)
 `$stamp = Join-Path `$tests '.simpleazureaudit-updated'
@@ -72,7 +94,7 @@ try {
     `$probe = Invoke-AzRestMethod -Method GET -Path 'subscriptions?api-version=2022-12-01' -ErrorAction Stop
     if (`$probe.StatusCode -ge 400) { throw "Azure Resource Manager returned HTTP `$(`$probe.StatusCode): `$(`$probe.Content)" }
     Connect-Maester -Service Azure -TenantId $(ConvertTo-PSLiteral $TenantId)
-    Write-Host "Connected to Azure as `$armAccount"
+    Write-Host "Connected to Azure"
 }
 catch {
     Write-Host "Azure tests will be skipped - Azure connection failed: `$(`$_.Exception.Message)" -ForegroundColor DarkYellow
@@ -93,7 +115,8 @@ if (`$mt) {
     # Short-lived ARM token for Maester's Azure tests (see the comment in the child script).
     # Passed through the environment so it never ends up in the generated script or the transcript.
     $armToken = Get-AuditArmToken -TenantId $TenantId
-    Write-Step "  Starting Maester (a browser sign-in to Microsoft Graph may open, possibly behind other windows)..." "Gray"
+    if (Test-AuditServicePrincipal) { Write-Step "  Starting Maester (Microsoft Graph sign-in as the app registration)..." "Gray" }
+    else { Write-Step "  Starting Maester (a browser sign-in to Microsoft Graph may open, possibly behind other windows)..." "Gray" }
     try {
         if ($armToken) {
             $env:SIMPLEAZUREAUDIT_ARM_TOKEN   = $armToken.Token

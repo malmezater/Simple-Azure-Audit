@@ -159,7 +159,7 @@ Remove-Item -Path $export -Recurse -Force -ErrorAction SilentlyContinue
         Replace('__RESULTS__', (ConvertTo-PSLiteral $resultsPath))
 
     Write-Step "  Exporting and evaluating resources with PSRule for Azure..." "Gray"
-    $r = Invoke-ToolProcess -Name "PSRule" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
+    $r = Invoke-ToolProcess -Name "PSRule" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory -SignInAzure
     # An empty result set means nothing was evaluated (a subscription always yields some passes).
     $hasOutput = (Test-Path $resultsPath) -and @(Read-JsonFile $resultsPath).Count -gt 0
     Save-ToolRunState -RawFolder $RawFolder -State @{

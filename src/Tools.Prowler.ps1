@@ -5,7 +5,8 @@
 #
 # Install: pip install prowler      (Python 3.10 - 3.13)
 # Auth:    reuses `az login` when the Azure CLI is signed in to the same tenant,
-#          otherwise interactive browser sign-in (--browser-auth).
+#          otherwise interactive browser sign-in (--browser-auth). With an app registration
+#          (-ClientId and a client secret): --sp-env-auth, AZURE_* variables set only while it runs.
 # ─────────────────────────────────────────────────────────────
 
 function Invoke-ProwlerScan {
@@ -31,9 +32,21 @@ function Invoke-ProwlerScan {
 
     New-Item -ItemType Directory -Force -Path $RawFolder, $LogDirectory | Out-Null
 
+    # App registration: Prowler only takes a client secret, through AZURE_* environment variables
+    # (--sp-env-auth). They are set for the Prowler process only and removed again below.
+    $useSp = Test-AuditServicePrincipal
+    if ($useSp -and $script:AuditAuth.CertificateThumbprint) {
+        Write-Step "  Skipped: Prowler cannot sign in with a certificate from the certificate store, only with a client secret." "DarkYellow"
+        Save-ToolRunState -RawFolder $RawFolder -State @{ Status = "Skipped"; Message = "Prowler supports app registration sign-in with a client secret only. Run Prowler separately, or use -ClientSecret instead of -CertificateThumbprint." }
+        return
+    }
+
     # Prefer the Azure CLI session when it already points at the right tenant.
     $authArgs = @("--browser-auth", "--tenant-id", $TenantId)
-    if (Get-Command az -ErrorAction SilentlyContinue) {
+    if ($useSp) {
+        $authArgs = @("--sp-env-auth")
+    }
+    elseif (Get-Command az -ErrorAction SilentlyContinue) {
         $cliTenant = (& az account show --query tenantId -o tsv 2>$null)
         if ($LASTEXITCODE -eq 0 -and "$cliTenant".Trim() -eq $TenantId) {
             $authArgs = @("--az-cli-auth")
@@ -58,12 +71,19 @@ function Invoke-ProwlerScan {
     # When stdout is piped, Python on Windows falls back to the ANSI code page (cp1252) and
     # Prowler's progress bar crashes with UnicodeEncodeError. Force UTF-8 for the child process
     # and decode its output as UTF-8 on this side.
-    $savedEnv = @{ PYTHONUTF8 = $env:PYTHONUTF8; PYTHONIOENCODING = $env:PYTHONIOENCODING }
+    $envNames = @("PYTHONUTF8", "PYTHONIOENCODING", "AZURE_CLIENT_ID", "AZURE_TENANT_ID", "AZURE_CLIENT_SECRET")
+    $savedEnv = @{}
+    foreach ($n in $envNames) { $savedEnv[$n] = [Environment]::GetEnvironmentVariable($n) }
     $savedEncoding = [Console]::OutputEncoding
     $env:PYTHONUTF8 = "1"
     $env:PYTHONIOENCODING = "utf-8"
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
+        if ($useSp) {
+            $env:AZURE_CLIENT_ID     = $script:AuditAuth.ClientId
+            $env:AZURE_TENANT_ID     = $script:AuditAuth.TenantId
+            $env:AZURE_CLIENT_SECRET = [System.Net.NetworkCredential]::new("", $script:AuditAuth.Secret).Password
+        }
         [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
         & $prowlerExe @prowlerArgs 2>&1 | Tee-Object -FilePath $log | Out-Host
         $exit = $LASTEXITCODE
@@ -71,8 +91,8 @@ function Invoke-ProwlerScan {
     finally {
         $sw.Stop()
         [Console]::OutputEncoding = $savedEncoding
-        $env:PYTHONUTF8 = $savedEnv.PYTHONUTF8
-        $env:PYTHONIOENCODING = $savedEnv.PYTHONIOENCODING
+        # Restore the previous values (removing the app's secret from this process)
+        foreach ($n in $envNames) { [Environment]::SetEnvironmentVariable($n, $savedEnv[$n]) }
     }
 
     # Exit code 3 means "scan completed and at least one check failed".

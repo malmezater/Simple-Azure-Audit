@@ -111,7 +111,7 @@ function Invoke-AzGovVizScan {
 "@
 
     Write-Step "  Scanning management group '$ManagementGroupId' (subscription filter: $(@($SubscriptionIds).Count) subscription(s))..." "Gray"
-    $r = Invoke-ToolProcess -Name "AzGovViz" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory
+    $r = Invoke-ToolProcess -Name "AzGovViz" -ScriptText $script -WorkingDirectory $RawFolder -LogDirectory $LogDirectory -SignInAzure
     $hasOutput = [bool](Get-LatestFile -Path $RawFolder -Filter "AzGovViz_*.html" -Recurse)
     $status = if ($r.ExitCode -eq 0 -and $hasOutput) { "Succeeded" } elseif ($hasOutput) { "PartiallySucceeded" } else { "Failed" }
     Save-ToolRunState -RawFolder $RawFolder -State @{

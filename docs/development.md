@@ -10,6 +10,7 @@ CHANGELOG.md                     # All changes, per version
 docs/                            # This documentation
 src/
 ├── AuditCommon.ps1              # Helpers, Add-Finding, tool-run register
+├── AuditAuth.ps1                # User or app registration sign-in; hands the app to tool processes without saving it
 ├── Checks.Security.ps1          # Built-in: NSG, public IPs, RBAC, users with privileged roles, shared key, classic admins
 ├── Checks.Cost.ps1              # Built-in: disks, stopped VMs, NICs, empty RGs
 ├── Checks.Infrastructure.ps1    # Built-in: VM encryption, KV certificates, secrets/keys without expiry, soft delete
@@ -17,6 +18,7 @@ src/
 ├── Checks.Advisor.ps1           # Built-in: Azure Advisor
 ├── Checks.Governance.ps1        # Built-in: temporary/test/leftover resources, expired tags, owners, exposure
 ├── Checks.Vulnerabilities.ps1   # Built-in: Defender for Cloud vulnerabilities; CVE/GHSA extraction; CISA KEV lookup
+├── FindingMerge.ps1             # Resource type names, and merging of the same problem reported by several tools
 ├── ActionPlan.ps1               # Workstreams (why/how), phases and the rules that place issues in the plan
 ├── Tools.Common.ps1             # Child-process runner, module installs, dispatcher
 ├── Tools.Prowler.ps1            # Run + import Prowler (OCSF JSON)
@@ -50,6 +52,17 @@ Everything the plan says is in `src\ActionPlan.ps1`:
 - `$script:PlanWorkstreams`: one entry per workstream with `why`, `how` (steps), `effort`, `owner`, and the matching rules `checkIds` (wildcards allowed), `sources`, `pattern` (regex on the issue title) and `categories`. The order of the list is both the matching order and the priority order inside a phase.
 
 Rebuild an existing run with `-ImportFrom` to see the effect without scanning again.
+
+## Merging duplicate findings
+
+`New-AuditReport` calls `Merge-AuditFindings` (`src\FindingMerge.ps1`) before it writes anything. It does two things:
+
+- **Resource type names.** `$script:ResourceTypeLabels` maps ARM types to readable names, and `$script:ResourceTypeAliases` maps other spellings. A type that is not listed gets a name built from the ARM type (`virtualNetworkGateways` → *Virtual network gateway*).
+- **Topics.** `$script:FindingTopics` lists problems that several tools check. Each topic has an `Id`, a `Title`, the ARM `Types` it applies to (empty = any resource), a `Pattern` (regex on the check title and check ID, lower case, with `_ . :` turned into spaces) an optional `Exclude` regex, and an optional `ResourceGroups = $true` that lets a topic without `Types` apply to resource groups too (used by *tags*). The first matching topic wins, so narrow topics go before broad ones. Findings on the same resource ID with the same topic become one row. A topic is only used when at least two different checks match it in the run; a lone check keeps its own title.
+
+The issue key in the report and the action plan is `topic::<Id>` for merged issues, so keep topic IDs stable. Topic titles also decide the action plan workstream (by its `pattern`), so word them like the problem ("allows public network access", not "reachable").
+
+To merge two checks that are not merged today, add a pattern to the matching topic or add a new topic, then rebuild a run with `-ImportFrom` and check *Reported by* on the issue. CVE findings, service retirements and findings without a resource ID are never merged.
 
 ## Demo report
 

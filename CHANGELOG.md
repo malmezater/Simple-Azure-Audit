@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Findings where several tools report the same problem on the same resource are merged into one row, marked *Found by N tools*. The row keeps the highest severity, and the issue lists each tool's own title and check ID under *Reported by*. The rules are in the new `src\FindingMerge.ps1` and cover storage accounts, Key Vault, App Service, App Service plans, API Management, Cosmos DB, container registries, virtual networks, VMs, NSGs, SQL, AKS and settings common to many resource types (public network access, private endpoints, zone/geo redundancy, diagnostics, CMK, local auth, managed identity, tags).
+- Sign-in as an app registration (service principal) with `-ClientId` and `-CertificateThumbprint` (recommended) or a client secret (`-ClientSecret` as a SecureString, or a prompt without echo). Nothing about the app is saved: the Az context autosave is off for the process, Graph uses `-ContextScope Process`, the tools get the details through environment variables that only exist while they run, and `run.json`, scripts and logs hold no IDs or secrets. Prowler supports a client secret only and is skipped with a certificate. The new `src\AuditAuth.ps1` holds the sign-in code.
+- Resource type filter on the Findings and Resources tabs, a subscription filter on the Resources tab, and sortable columns (resource, type, findings) in the Resources table.
+
+### Changed
+
+- Resource types are shown with readable names, so `Storage Account` and `Microsoft.Storage/storageAccounts` are both *Storage account*. This also covers types such as WAF policies, activity log alerts, metric alerts, Key Vault keys and secrets, and role definitions.
+- Action plan: DDoS protection findings go to *Close exposure to the Internet*, and cross-tenant replication to *Protect data in transit and at rest*.
+- In the findings CSV, the action plan CSV and the CSV export, `Source` and `CheckId` list every tool and check of a merged row, comma-separated.
+
 ## [2.0.0] - 2026-10-01
 
 A rewrite that merges the built-in checks with free external assessment tools into one report, with a prioritised action plan and known vulnerabilities (CVE). This version also includes the work that was published on GitHub as 1.0.x (tag `public-release`, 2026-09-16/17) without release notes.
