@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `-UseDeviceAuthentication`: user sign-in with a device code instead of the Windows sign-in window (WAM), which often does not appear in an elevated, VS Code or remote terminal. Recommended for user sign-in.
+
+### Fixed
+
+- User sign-in no longer reuses an Az context left in the session by an app registration, so a run without `-ClientId` always runs as a user.
+- A failed user sign-in now stops with the actual error and a hint, instead of continuing silently and ending with *No enabled subscriptions were found*.
+- `-SubscriptionId "<id1>", "<id2>"` through `pwsh -File` audits every listed subscription. Before, the IDs after the first were bound to other parameters, such as `-ClientId`, which turned the run into an app registration sign-in. Positional binding is now off.
+
 ## [2.1.0] - 2026-10-13
 
 One row per problem when several tools report it, sign-in as an app registration, and report branding.

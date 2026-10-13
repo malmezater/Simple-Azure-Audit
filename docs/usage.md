@@ -1,7 +1,7 @@
 # Usage
 
 ```powershell
-.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-ClientId <string> [-CertificateThumbprint <string> | -ClientSecret <securestring>]]
+.\Invoke-AzureAudit.ps1 [-TenantID <string>] [-UseDeviceAuthentication | -ClientId <string> [-CertificateThumbprint <string> | -ClientSecret <securestring>]]
                         [-SubscriptionId <string[]> | -AllSubscriptions] [-OutputPath <string>]
                         [-Tools <All|Native|Prowler|Maester|PSRule|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
                         [-ManagementGroupId <string>] [-ToolsPath <string>] [-InstallMissing]
@@ -11,10 +11,24 @@
 
 ## Sign-in
 
-1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and resolves the subscriptions in scope (see below).
+1. The script signs in with `Connect-AzAccount` (scoped to `-TenantID` when given) and resolves the subscriptions in scope (see below). An existing Az sign-in is reused only when it is a user in the same tenant; one left behind by an app registration is not.
 2. PowerShell-based tools (PSRule, AzGovViz, WARA, ARI) run in a child `pwsh` process and reuse that Az sign-in.
 3. **Maester** signs in to Microsoft Graph interactively (`Connect-MgGraph`). The window can open behind other windows. Maester reuses the Az sign-in for its Azure tests.
 4. **Prowler** reuses `az login` when the Azure CLI is signed in to the same tenant. Otherwise it opens a browser sign-in. Run `az login --tenant <tenant>` first to avoid it.
+
+### Signing in as a user
+
+Use `-UseDeviceAuthentication` for user sign-in:
+
+```powershell
+pwsh -File .\Invoke-AzureAudit.ps1 -TenantID "<tenant>" -UseDeviceAuthentication -AllSubscriptions
+```
+
+The script shows a code. Open <https://microsoft.com/devicelogin> in any browser, on any device, enter the code and sign in.
+
+Without it, Az.Accounts uses the Windows sign-in window (WAM). In an elevated PowerShell, in the VS Code terminal and over remote sessions that window often opens behind other windows or not at all: the script prints *Please select the account you want to login with* and then stops with a sign-in error. Run again with `-UseDeviceAuthentication`, or turn the Windows sign-in window off for good with `Update-AzConfig -EnableLoginByWam $false` (the browser sign-in is used instead).
+
+If a Conditional Access policy blocks device code flow in the tenant, leave `-UseDeviceAuthentication` out and use the browser sign-in.
 
 ### Signing in as an app registration
 
@@ -46,7 +60,7 @@ Start the audit with `pwsh -File` as above when you can. The app's session then 
 | How | Result |
 |-----|--------|
 | `-SubscriptionId "<id>"` | One subscription. |
-| `-SubscriptionId "<id1>","<id2>"` or `"<id1>,<id2>"` | Several subscriptions (IDs or names). |
+| `-SubscriptionId "<id1>","<id2>"` or `"<id1>,<id2>"` | Several subscriptions (IDs or names). Both forms also work through `pwsh -File`. |
 | `-AllSubscriptions` | Every **enabled** subscription the account can see in the tenant. |
 | Neither | If the tenant has one subscription, it is used. Otherwise a numbered list is shown and you answer e.g. `2`, `1-3`, `1,3,5`, `1-3,6` or `all`. |
 
@@ -63,6 +77,7 @@ With more than one subscription, the report adds a **By subscription** table on 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `-TenantID` | Active context | Tenant to sign in to. Required with `-ClientId`. |
+| `-UseDeviceAuthentication` | Off | User sign-in with a device code instead of the Windows sign-in window. Recommended for user sign-in. See [Signing in as a user](#signing-in-as-a-user). Not with `-ClientId`. |
 | `-ClientId` | – | Sign in as this app registration (application ID) instead of a user. See [Signing in as an app registration](#signing-in-as-an-app-registration). |
 | `-CertificateThumbprint` | – | With `-ClientId`: the app's certificate in the Windows certificate store. Recommended. |
 | `-ClientSecret` | Prompt | With `-ClientId` and no certificate: the client secret as a `SecureString`. Omitted = prompted for without echo. |

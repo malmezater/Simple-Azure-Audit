@@ -37,8 +37,10 @@ The report turns the findings into a **project plan in four phases** – what to
 
    ```powershell
    az login --tenant "xxxxxxxx-..."      # optional: lets Prowler reuse the sign-in
-   .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -AllSubscriptions -CustomerName "Contoso AB" -OpenReport
+   .\Invoke-AzureAudit.ps1 -TenantID "xxxxxxxx-..." -UseDeviceAuthentication -AllSubscriptions -CustomerName "Contoso AB" -OpenReport
    ```
+
+   `-UseDeviceAuthentication` signs you in with a code at <https://microsoft.com/devicelogin>, since the Windows sign-in window often does not appear in an elevated or VS Code terminal. See [Signing in as a user](docs/usage.md#signing-in-as-a-user).
 
 4. Share the `.zip` that is created next to the run folder.
 
