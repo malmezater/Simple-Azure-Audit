@@ -6,10 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-13
+
+One row per problem when several tools report it, sign-in as an app registration, and report branding.
+
 ### Added
 
 - Findings where several tools report the same problem on the same resource are merged into one row, marked *Found by N tools*. The row keeps the highest severity, and the issue lists each tool's own title and check ID under *Reported by*. The rules are in the new `src\FindingMerge.ps1` and cover storage accounts, Key Vault, App Service, App Service plans, API Management, Cosmos DB, container registries, virtual networks, VMs, NSGs, SQL, AKS and settings common to many resource types (public network access, private endpoints, zone/geo redundancy, diagnostics, CMK, local auth, managed identity, tags).
 - Sign-in as an app registration (service principal) with `-ClientId` and `-CertificateThumbprint` (recommended) or a client secret (`-ClientSecret` as a SecureString, or a prompt without echo). Nothing about the app is saved: the Az context autosave is off for the process, Graph uses `-ContextScope Process`, the tools get the details through environment variables that only exist while they run, and `run.json`, scripts and logs hold no IDs or secrets. Prowler supports a client secret only and is skipped with a certificate. The new `src\AuditAuth.ps1` holds the sign-in code.
+- Report branding: `-Branding <folder>` (default `branding\custom` when it exists) adds a logo, favicon, colours and header texts from `brand.json` and `brand.css`, without changing the template. `branding/example/` shows the format, and `branding/custom/` is ignored by git so a company copy of the repo can keep its branding there and merge updates without conflicts. The new `Update-ReportBranding.ps1` rebuilds an existing report, such as the demo, with the current template and a branding.
 - Resource type filter on the Findings and Resources tabs, a subscription filter on the Resources tab, and sortable columns (resource, type, findings) in the Resources table.
 
 ### Changed
@@ -17,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Resource types are shown with readable names, so `Storage Account` and `Microsoft.Storage/storageAccounts` are both *Storage account*. This also covers types such as WAF policies, activity log alerts, metric alerts, Key Vault keys and secrets, and role definitions.
 - Action plan: DDoS protection findings go to *Close exposure to the Internet*, and cross-tenant replication to *Protect data in transit and at rest*.
 - In the findings CSV, the action plan CSV and the CSV export, `Source` and `CheckId` list every tool and check of a merged row, comma-separated.
+- Documentation: a machine with at least 16 GB of RAM is recommended for a full run (docs/prerequisites.md#hardware).
 
 ## [2.0.0] - 2026-10-01
 
@@ -99,5 +105,6 @@ First version. The script did not yet report a version number.
 - Color-coded HTML report with filters, and a CSV for Excel.
 - Sign-in scoped to a tenant with `-TenantID`.
 
-[Unreleased]: https://github.com/malmezater/Simple-Azure-Audit/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/malmezater/Simple-Azure-Audit/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/malmezater/Simple-Azure-Audit/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/malmezater/Simple-Azure-Audit/releases/tag/v2.0.0

@@ -2,3 +2,8 @@ tools/
 # Audit output (run folders and any exported report/CSV) - contains customer data
 AzureAudit_*
 *.ocsf.json
+
+#Ignore any temporary folder
+.temp/*
+# Private report branding (a company's logo and colours) - keep it out of the public repo
+branding/custom/

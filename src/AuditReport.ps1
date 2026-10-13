@@ -20,10 +20,14 @@ function New-AuditReport {
         [string]$CustomerName,
         [string]$PreparedBy,
         [string]$ScriptVersion,
-        [string]$GeneratedAt = (Get-Date -Format "yyyy-MM-dd HH:mm")
+        [string]$GeneratedAt = (Get-Date -Format "yyyy-MM-dd HH:mm"),
+        [string]$BrandingPath                                       # branding folder, see Get-ReportBranding
     )
 
     Write-Section "GENERATING REPORTS"
+
+    $Branding = Get-ReportBranding -Path $BrandingPath
+    if (-not $PreparedBy -and $Branding) { $PreparedBy = $Branding.PreparedBy }
 
     $subs = @($Subscriptions | Where-Object { $_ })
     $subNames = @{}
@@ -67,6 +71,7 @@ function New-AuditReport {
         meta = [ordered]@{
             customerName     = $(if ($CustomerName) { $CustomerName } else { $scopeTitle })
             preparedBy       = $PreparedBy
+            eyebrow          = $(if ($Branding) { $Branding.Eyebrow } else { "" })
             subscriptionName = $scopeTitle
             subscriptionId   = $(if ($subs.Count -eq 1) { "$($subs[0].Id)" } else { "" })
             subscriptions    = @($subs | ForEach-Object { [ordered]@{ id = "$($_.Id)"; name = "$($_.Name)" } })
@@ -92,18 +97,94 @@ function New-AuditReport {
     }
 
     # ── HTML ─────────────────────────────────────────────────
-    Write-Step "Building HTML report..."
+    Write-Step "Building HTML report$(if ($Branding) { " (branding: $($Branding.Name))" })..."
+    $title = "Azure assessment - $(if ($CustomerName) { $CustomerName } else { $scopeTitle })"
+    $html = ConvertTo-AuditReportHtml -Json $json -Title $title -Branding $Branding
+    Set-Content -Path $HtmlPath -Value $html -Encoding utf8 -NoNewline
+    Write-Step "  $HtmlPath" "Gray"
+}
+
+function ConvertTo-AuditReportHtml {
+    # Fills src\report-template.html with the report data (JSON, HTML-safe) and the branding.
+    param(
+        [Parameter(Mandatory)][string]$Json,
+        [Parameter(Mandatory)][string]$Title,
+        $Branding     # from Get-ReportBranding, or $null for the neutral look
+    )
     $templatePath = Join-Path $PSScriptRoot "report-template.html"
     if (-not (Test-Path $templatePath)) { throw "Report template not found: $templatePath" }
     $template = Get-Content -LiteralPath $templatePath -Raw -Encoding utf8
 
-    $title = "Azure assessment - $(if ($CustomerName) { $CustomerName } else { $scopeTitle })"
-    $titleEncoded = [System.Net.WebUtility]::HtmlEncode($title)
-
     # String.Replace (not -replace) so '$' in the data is never treated as a regex substitution.
-    $html = $template.Replace("__REPORT_TITLE__", $titleEncoded).Replace("__AUDIT_DATA__", $json)
-    Set-Content -Path $HtmlPath -Value $html -Encoding utf8 -NoNewline
-    Write-Step "  $HtmlPath" "Gray"
+    return $template.
+        Replace("__REPORT_TITLE__", [System.Net.WebUtility]::HtmlEncode($Title)).
+        Replace("__BRAND_HEAD__", $(if ($Branding) { $Branding.HeadHtml } else { "" })).
+        Replace("__BRAND_LOGO__", $(if ($Branding) { $Branding.LogoHtml } else { "" })).
+        Replace("/*__BRAND_CSS__*/", $(if ($Branding) { $Branding.Css } else { "" })).
+        Replace("__AUDIT_DATA__", $Json)
+}
+
+function Get-ReportBranding {
+    <#
+      Reads a branding folder and returns @{ Name; Eyebrow; PreparedBy; Css; LogoHtml; HeadHtml }, or $null
+      when no folder is given. The folder holds (all optional):
+        brand.json  { "name", "eyebrow", "preparedBy", "logo", "logoAlt", "favicon" }
+        brand.css   CSS added after the report's own CSS: --brand-* and colour tokens, any overrides
+        the logo and favicon files named in brand.json (png, jpg, svg, gif, webp, ico)
+      Images are embedded as data URIs, so the report stays one self-contained file.
+      See branding/README.md.
+    #>
+    param([string]$Path)
+    if (-not $Path) { return $null }
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "Branding folder not found: $Path" }
+    $folder = (Resolve-Path -LiteralPath $Path).Path
+
+    $cfg = $null
+    $cfgPath = Join-Path $folder "brand.json"
+    if (Test-Path -LiteralPath $cfgPath) {
+        try { $cfg = Get-Content -LiteralPath $cfgPath -Raw -Encoding utf8 | ConvertFrom-Json }
+        catch { throw "Could not read $cfgPath`: $($_.Exception.Message)" }
+    }
+    $get = { param($n) if ($cfg -and $cfg.PSObject.Properties[$n]) { "$($cfg.$n)".Trim() } else { "" } }
+
+    $css = ""
+    $cssPath = Join-Path $folder "brand.css"
+    if (Test-Path -LiteralPath $cssPath) {
+        $css = Get-Content -LiteralPath $cssPath -Raw -Encoding utf8
+        if ($css -match '</style') { throw "$cssPath must not contain '</style'." }
+    }
+
+    $toDataUri = {
+        param($file)
+        $p = Join-Path $folder $file
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { throw "Branding file not found: $p" }
+        $mime = @{ ".png" = "image/png"; ".jpg" = "image/jpeg"; ".jpeg" = "image/jpeg"; ".svg" = "image/svg+xml"
+                   ".gif" = "image/gif"; ".webp" = "image/webp"; ".ico" = "image/x-icon" }[[System.IO.Path]::GetExtension($p).ToLowerInvariant()]
+        if (-not $mime) { throw "Unsupported image type for branding: $p (use png, jpg, svg, gif, webp or ico)" }
+        "data:$mime;base64,$([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($p)))"
+    }
+
+    $name = & $get "name"
+    if (-not $name) { $name = Split-Path $folder -Leaf }
+    $logoHtml = ""
+    $logo = & $get "logo"
+    if ($logo) {
+        $alt = & $get "logoAlt"
+        if (-not $alt) { $alt = $name }
+        $logoHtml = "<img class=`"brand-logo`" alt=`"$([System.Net.WebUtility]::HtmlEncode($alt))`" src=`"$(& $toDataUri $logo)`">"
+    }
+    $headHtml = ""
+    $favicon = & $get "favicon"
+    if ($favicon) { $headHtml = "<link rel=`"icon`" href=`"$(& $toDataUri $favicon)`">" }
+
+    return [PSCustomObject]@{
+        Name       = $name
+        Eyebrow    = & $get "eyebrow"
+        PreparedBy = & $get "preparedBy"
+        Css        = $css
+        LogoHtml   = $logoHtml
+        HeadHtml   = $headHtml
+    }
 }
 
 function New-AuditReportPackage {

@@ -1,0 +1,20 @@
+/* Example branding: a dark teal masthead and teal accents. Copy this folder to branding/custom and edit it. */
+:root{
+  --accent:#0f766e; --accent-ink:#ffffff; --accent-wash:rgba(15,118,110,.10); --link:#0f766e;
+  --meter-track:#ccfbf1; --meter-fill:#0f766e;
+  --brand-band:#134e4a; --brand-band-ink:#ffffff; --brand-band-ink-2:#ccfbf1; --brand-band-muted:#99f6e4;
+  --brand-stripe:#14b8a6; --brand-stripe-width:4px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --accent:#2dd4bf; --accent-ink:#0b0b0b; --accent-wash:rgba(45,212,191,.16); --link:#5eead4;
+    --meter-track:#134e4a; --meter-fill:#2dd4bf;
+  }
+}
+:root[data-theme="dark"]{
+  --accent:#2dd4bf; --accent-ink:#0b0b0b; --accent-wash:rgba(45,212,191,.16); --link:#5eead4;
+  --meter-track:#134e4a; --meter-fill:#2dd4bf;
+}
+.masthead .btn{background:transparent;border-color:rgba(255,255,255,.35);color:var(--brand-band-ink)}
+.masthead .btn:hover{background:rgba(255,255,255,.12)}
+.masthead .btn.primary{background:#14b8a6;border-color:#14b8a6;color:#0b0b0b}

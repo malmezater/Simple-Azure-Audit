@@ -18,6 +18,10 @@
 
 Tools that are missing are shown as **Not installed** in the report, and the rest of the run continues. Only the built-in checks are required.
 
+## Hardware
+
+Use a machine with **at least 16 GB of RAM** for a full run. Several tools keep the whole environment in memory while they work (PSRule evaluates every exported resource at once, and AzGovViz and ARI build their reports in memory), and on large tenants or many subscriptions a machine with less memory can run out partway through. With less RAM, leave out the heaviest tools (`-ExcludeTools PSRule,AzGovViz,ARI`) or audit fewer subscriptions per run.
+
 ### Option 1 – prepare a dedicated machine (recommended)
 
 1. Install the apps with winget (or deploy the machine with a PAWDeploy profile that includes the *Security Audit* package):

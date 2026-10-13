@@ -5,7 +5,9 @@
 ```
 Invoke-AzureAudit.ps1            # Parameters, sign-in, orchestration, summary
 Install-AuditPrerequisites.ps1   # Installs modules, Prowler, AzGovViz and Maester tests (no audit)
+Update-ReportBranding.ps1        # Rebuilds a report HTML (e.g. the demo) with the current template and a branding
 Demo_AzureAudit_Report.html      # Example report built from fictional data
+branding/                        # Report brandings: README.md (format), example/; custom/ is ignored
 CHANGELOG.md                     # All changes, per version
 docs/                            # This documentation
 src/
@@ -66,7 +68,14 @@ To merge two checks that are not merged today, add a pattern to the matching top
 
 ## Demo report
 
-`Demo_AzureAudit_Report.html` is built with the current template from fictional data. Rebuild it after changing the template or the plan, so the example stays current.
+`Demo_AzureAudit_Report.html` is built with the current template from fictional data. Rebuild it after changing the template or the plan, so the example stays current. After a template-only change, `.\Update-ReportBranding.ps1 -Path .\Demo_AzureAudit_Report.html -NoBranding` is enough.
+
+## Branding
+
+The report template must stay brand-neutral: colours come from CSS tokens, and a branding folder (`branding/README.md`) adds its logo, texts and `brand.css` through the `__BRAND_HEAD__`, `__BRAND_LOGO__` and `/*__BRAND_CSS__*/` placeholders. Company copies of the repo keep their look in `branding/custom/` and merge updates from here without conflicts, so:
+
+- Keep the token names (`--accent`, `--brand-band` …) stable. Renaming one breaks every branding that sets it; add new tokens with a fallback (`var(--brand-x, var(--surface))`) instead.
+- Do not put company-specific texts or colours in `src/`.
 
 ## Adding a tool
 

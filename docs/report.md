@@ -17,6 +17,10 @@ Each run creates a folder with a self-contained HTML file that works offline and
 
 The report can also **export a CSV** of the current filter and **print to PDF**, and it has a light and a dark theme.
 
+### Branding
+
+The logo, colours and the line above the title come from a branding folder: `-Branding <folder>`, or `branding\custom` when it exists. Without one, the report has the neutral look of the demo. An existing report, such as the demo, can be rebranded without scanning again with `Update-ReportBranding.ps1`. See [branding/README.md](../branding/README.md), which also describes how a company copy of the repo keeps its branding while taking updates from this repo.
+
 ### Findings vs issues
 
 A *finding* is one failed check on one resource. An *issue* groups all findings from the same check, so "missing tags" on 300 resources is **one issue with 300 findings**. Issues are prioritised by severity and number of affected resources.

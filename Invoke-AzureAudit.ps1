@@ -99,6 +99,10 @@
 .PARAMETER PreparedBy
     Optional "prepared by" text shown in the report header (e.g. your company).
 
+.PARAMETER Branding
+    Folder with a report branding (brand.json, brand.css, logo). Default: branding\custom next to this script
+    when it exists, otherwise the neutral look. See branding\README.md.
+
 .PARAMETER SkipAdvisor
     Skip the Azure Advisor fetch in the built-in checks.
 
@@ -159,6 +163,7 @@ param(
     [string]   $ImportFrom,
     [string]   $CustomerName,
     [string]   $PreparedBy,
+    [string]   $Branding,
     [switch]   $InstallMissing,
     [switch]   $SkipAdvisor,
     [switch]   $Offline,
@@ -170,7 +175,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "SilentlyContinue"
 $WarningPreference     = "SilentlyContinue"
-$ScriptVersion         = "2.0.0"
+$ScriptVersion         = "2.1.0"
 
 function Stop-Audit {
     # $ErrorActionPreference is SilentlyContinue for the Az calls, which would also swallow 'throw'.
@@ -219,6 +224,19 @@ $allTools = @("Native","Prowler","Maester","PSRule","AzGovViz","WARA","ARI")
 $selectedTools = if ($Tools -contains "All") { $allTools } else { $allTools | Where-Object { $_ -in $Tools } }
 $selectedTools = @($selectedTools | Where-Object { $_ -notin $ExcludeTools })
 if ($selectedTools.Count -eq 0) { Stop-Audit "No tools selected. Check -Tools / -ExcludeTools." }
+
+# A private copy of this repo keeps its own look in branding\custom; the public repo has no such folder.
+if (-not $Branding) {
+    $customBranding = Join-Path (Join-Path $PSScriptRoot "branding") "custom"
+    if (Test-Path -LiteralPath $customBranding) { $Branding = $customBranding }
+}
+# Check the branding before scanning, so a typo does not surface only after a long run
+if ($Branding) {
+    $ErrorActionPreference = "Stop"
+    try { $null = Get-ReportBranding -Path $Branding }
+    catch { Stop-Audit "Branding: $($_.Exception.Message)" }
+    finally { $ErrorActionPreference = "SilentlyContinue" }
+}
 
 Write-Host @"
 
@@ -446,6 +464,7 @@ $reportParams = @{
     ScriptVersion    = $ScriptVersion
 }
 if ($generatedAt) { $reportParams.GeneratedAt = $generatedAt }
+if ($Branding) { $reportParams.BrandingPath = $Branding }
 New-AuditReport @reportParams
 
 $zipFile = $null

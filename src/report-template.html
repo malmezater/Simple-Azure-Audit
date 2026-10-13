@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__REPORT_TITLE__</title>
+__BRAND_HEAD__
 <style>
 :root{
   color-scheme: light;
@@ -45,14 +46,18 @@ button,input,select{font:inherit;color:inherit}
 @media (max-width:640px){.wrap{padding:0 16px}}
 
 /* Header */
-.masthead{background:var(--surface);border-bottom:1px solid var(--border)}
+/* The masthead takes its colours from the --brand-* tokens, which a branding's brand.css can set (branding/README.md) */
+.masthead{background:var(--brand-band,var(--surface));color:var(--brand-band-ink,var(--ink));border-bottom:var(--brand-stripe-width,1px) solid var(--brand-stripe,var(--border))}
+.brand{display:flex;gap:18px;align-items:center;min-width:0}
+.brand-logo{height:56px;width:auto;flex:none}
+@media (max-width:640px){.brand{flex-direction:column;align-items:flex-start;gap:12px}.brand-logo{height:40px}}
 .masthead .wrap{padding-top:28px;padding-bottom:20px;display:flex;gap:24px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
-.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.eyebrow{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--brand-band-muted,var(--muted));margin:0 0 6px}
 h1{font-size:28px;line-height:1.2;margin:0;font-weight:650;letter-spacing:-.01em}
-.meta{margin:8px 0 0;color:var(--ink-2);font-size:13px;display:flex;flex-wrap:wrap;gap:4px 18px}
+.meta{margin:8px 0 0;color:var(--brand-band-ink-2,var(--ink-2));font-size:13px;display:flex;flex-wrap:wrap;gap:4px 18px}
 .meta span{white-space:nowrap}
 @media (max-width:640px){.meta span{white-space:normal}.meta code{word-break:break-all}}
-.meta code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--muted)}
+.meta code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--brand-band-muted,var(--muted))}
 .head-actions{display:flex;gap:8px;flex-wrap:wrap}
 .btn{border:1px solid var(--border-strong);background:var(--surface);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px}
 .btn:hover{background:var(--surface-2)}
@@ -238,7 +243,9 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   details.issue .issue-body{display:none}
   details.ws{break-inside:auto}
   .bar-seg,.swatch,.meter>div,.status i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .masthead{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+/*__BRAND_CSS__*/
 </style>
 </head>
 <body>
@@ -246,10 +253,13 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
 
 <header class="masthead">
   <div class="wrap">
-    <div>
-      <p class="eyebrow" id="eyebrow">Azure environment assessment</p>
-      <h1 id="report-title"></h1>
-      <p class="meta" id="report-meta"></p>
+    <div class="brand">
+      __BRAND_LOGO__
+      <div>
+        <p class="eyebrow" id="eyebrow">Azure environment assessment</p>
+        <h1 id="report-title"></h1>
+        <p class="meta" id="report-meta"></p>
+      </div>
     </div>
     <div class="head-actions">
       <button class="btn" id="btn-theme" type="button" title="Toggle light/dark">Theme</button>
@@ -629,7 +639,7 @@ footer{color:var(--muted);font-size:12px;padding:24px 0 40px;border-top:1px soli
   // ── Header ──────────────────────────────────────────────
   function renderHeader() {
     document.getElementById("report-title").textContent = META.customerName || META.subscriptionName || "Azure environment";
-    if (META.preparedBy) document.getElementById("eyebrow").textContent = "Azure environment assessment · " + META.preparedBy;
+    document.getElementById("eyebrow").textContent = (META.eyebrow || "Azure environment assessment") + (META.preparedBy ? " · " + META.preparedBy : "");
     var meta = document.getElementById("report-meta");
     (MULTI_SUB ? [
       ["Subscriptions", SUBSCRIPTIONS.length <= 4 ? SUBSCRIPTIONS.map(function (s) { return s.name; }).join(", ") : SUBSCRIPTIONS.length + " (see By subscription)"]

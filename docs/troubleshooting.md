@@ -10,6 +10,7 @@ Every external tool writes a transcript to `logs\<tool>.log` in the run folder. 
 | **Prowler not found right after installing** | Open a new terminal so the updated PATH is loaded. |
 | **pip: "No such file or directory ... Long Path support"** | Prowler's dependencies exceed 260-character paths. `Install-AuditPrerequisites.ps1` enables `LongPathsEnabled` when run elevated. Otherwise set `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1` and rerun. |
 | **"Could not load src\\…" / blocked by execution policy** | The files are marked as downloaded from the internet. Run `Get-ChildItem . -Recurse -File \| Unblock-File`, or start with `pwsh -ExecutionPolicy Bypass -File .\Invoke-AzureAudit.ps1`. |
+| **A tool stops with `OutOfMemoryException`, or the machine becomes very slow** | The machine ran out of memory. Use one with at least 16 GB of RAM, or leave out the heaviest tools (`-ExcludeTools PSRule,AzGovViz,ARI`) or audit fewer subscriptions per run. See [Hardware](prerequisites.md#hardware). |
 | **Run aborts with a `??` parse error** | Use `pwsh` (PowerShell 7), not Windows PowerShell 5.1. |
 | **Garbled characters (å/ä/ö, box drawing)** | Keep the `.ps1` files saved as UTF-8 with BOM. |
 | **"App registration sign-in failed"** | Check the tenant ID, the application ID and the secret or certificate. With `-CertificateThumbprint` the certificate must be in `Cert:\CurrentUser\My` or `Cert:\LocalMachine\My` with its private key, and its public part uploaded to the app. |

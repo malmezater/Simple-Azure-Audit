@@ -5,7 +5,7 @@
                         [-SubscriptionId <string[]> | -AllSubscriptions] [-OutputPath <string>]
                         [-Tools <All|Native|Prowler|Maester|PSRule|AzGovViz|WARA|ARI>[]] [-ExcludeTools <string[]>]
                         [-ManagementGroupId <string>] [-ToolsPath <string>] [-InstallMissing]
-                        [-CustomerName <string>] [-PreparedBy <string>] [-RequiredTags <string>]
+                        [-CustomerName <string>] [-PreparedBy <string>] [-Branding <string>] [-RequiredTags <string>]
                         [-SkipAdvisor] [-Offline] [-OpenReport] [-Zip <Report|Full|None>] [-ImportFrom <string>]
 ```
 
@@ -76,6 +76,7 @@ With more than one subscription, the report adds a **By subscription** table on 
 | `-InstallMissing` | Off | Install missing PowerShell modules and download AzGovViz. |
 | `-CustomerName` | Subscription name | Title of the report. |
 | `-PreparedBy` | – | Shown in the report header, e.g. your company name. |
+| `-Branding` | `branding\custom` if it exists | Folder with the report's logo, colours and header texts. See [branding/README.md](../branding/README.md). |
 | `-RequiredTags` | `Environment,Owner,CostCenter` | Tags the tagging check (`NATIVE-COMP-008`) requires. |
 | `-SkipAdvisor` | Off | Skip Azure Advisor in the built-in checks. |
 | `-Offline` | Off | Do not download the CISA Known Exploited Vulnerabilities catalogue. CVEs are still listed, but not marked as known exploited. A copy already in the run folder is still used. |
@@ -131,3 +132,5 @@ With more than one subscription, the report adds a **By subscription** table on 
 ## How long does it take?
 
 Most of the run time is spent in the external tools. Maester usually takes 10–20 minutes, and PSRule, AzGovViz and ARI grow with the number of resources. The **Tools & method** tab shows the duration of each tool, so after a first run you know which ones to leave out with `-Tools` or `-ExcludeTools` for a shorter run.
+
+A full run on a large environment also needs memory: use a machine with at least 16 GB of RAM (see [Hardware](prerequisites.md#hardware)).
